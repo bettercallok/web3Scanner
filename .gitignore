@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+
+# Django
+*.log
+local_settings.py
+/backend/media/
+/backend/staticfiles/
+/backend/db.sqlite3
+/backend/db.sqlite3-journal
+/backend/static/
+/backend/venv/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.example  # Comment this out if you want to track the example
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+*.sublime-project
+*.sublime-workspace
+
+# Node.js / Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vite/
+dist/
+
+# Docker volumes & cache
+chroma_data/
+ollama_data/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Development
+.venv.bak
+celerybeat-schedule

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Web3 Security Report — {{ job.contract_name }}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Fira+Mono&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', sans-serif; color: #1a1a2e; background: #fff; font-size: 13px; }
+  a { color: #6c63ff; }
+
+  /* Cover */
+  .cover { background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); color: #fff;
+           padding: 60px 50px; min-height: 280px; page-break-after: always; }
+  .cover h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .cover .sub { font-size: 14px; opacity: 0.75; margin-bottom: 30px; }
+  .cover .meta { display: flex; gap: 40px; margin-top: 30px; }
+  .cover .meta-item label { font-size: 11px; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; }
+  .cover .meta-item p { font-size: 14px; font-weight: 600; margin-top: 4px; }
+
+  /* Risk Badge */
+  .risk-badge { display: inline-block; padding: 6px 18px; border-radius: 20px;
+                font-weight: 700; font-size: 14px; letter-spacing: 1px;
+                background: {{ risk_color }}; color: #fff; margin-top: 20px; }
+
+  /* Section */
+  .section { padding: 30px 50px; border-bottom: 1px solid #eee; }
+  .section h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px;
+                border-left: 4px solid #6c63ff; padding-left: 12px; color: #302b63; }
+
+  /* Score area */
+  .score-row { display: flex; gap: 30px; align-items: center; margin-bottom: 20px; }
+  .score-circle { width: 90px; height: 90px; border-radius: 50%;
+                  border: 6px solid {{ risk_color }}; display: flex; flex-direction: column;
+                  align-items: center; justify-content: center; }
+  .score-circle .num { font-size: 24px; font-weight: 700; color: {{ risk_color }}; }
+  .score-circle .lbl { font-size: 9px; text-transform: uppercase; color: #666; }
+  .summary-text { flex: 1; line-height: 1.7; color: #444; }
+
+  /* Summary counts */
+  .count-row { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .count-card { padding: 12px 20px; border-radius: 10px; text-align: center; min-width: 90px; }
+  .count-card .n { font-size: 22px; font-weight: 700; }
+  .count-card .t { font-size: 10px; text-transform: uppercase; opacity: 0.8; }
+  .cc { background: #fef2f2; color: #dc2626; }
+  .ch { background: #fff7ed; color: #ea580c; }
+  .cm { background: #fffbeb; color: #d97706; }
+  .cl { background: #f0fdf4; color: #16a34a; }
+  .ci { background: #f8fafc; color: #64748b; }
+
+  /* Vuln cards */
+  .vuln-card { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 16px; overflow: hidden; }
+  .vuln-header { padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  .sev-badge { padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+               text-transform: uppercase; color: #fff; }
+  .sev-critical { background: #dc2626; }
+  .sev-high { background: #ea580c; }
+  .sev-medium { background: #d97706; }
+  .sev-low { background: #16a34a; }
+  .sev-informational { background: #64748b; }
+  .vuln-title { font-weight: 600; font-size: 14px; flex: 1; }
+  .swc-tag { font-size: 10px; background: #ede9fe; color: #6c63ff; padding: 2px 8px; border-radius: 8px; }
+  .tool-tag { font-size: 10px; background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 8px; }
+  .vuln-body { padding: 0 16px 14px; }
+  .vuln-body p { margin-bottom: 8px; line-height: 1.6; color: #444; }
+  .vuln-body strong { color: #302b63; }
+  .code-block { background: #1e1e2e; color: #cdd6f4; padding: 10px 14px; border-radius: 8px;
+                font-family: 'Fira Mono', monospace; font-size: 11px; margin: 8px 0;
+                white-space: pre-wrap; word-break: break-all; }
+  .remediation { background: #f0fdf4; border-left: 3px solid #16a34a; padding: 10px 14px;
+                  border-radius: 0 8px 8px 0; color: #166534; }
+
+  /* Footer */
+  .footer { padding: 20px 50px; text-align: center; color: #9ca3af; font-size: 11px; }
+</style>
+</head>
+<body>
+
+<!-- Cover Page -->
+<div class="cover">
+  <h1>🔐 Smart Contract Security Report</h1>
+  <p class="sub">AI-Powered Web3 Vulnerability Analysis</p>
+  <div class="meta">
+    <div class="meta-item">
+      <label>Contract</label>
+      <p>{{ job.contract_name or "Unknown Contract" }}</p>
+    </div>
+    <div class="meta-item">
+      <label>Address</label>
+      <p style="font-family:monospace;font-size:12px;">{{ job.address }}</p>
+    </div>
+    <div class="meta-item">
+      <label>Network</label>
+      <p>{{ job.get_network_display() }}</p>
+    </div>
+    <div class="meta-item">
+      <label>Scanned</label>
+      <p>{{ job.created_at.strftime('%B %d, %Y') }}</p>
+    </div>
+  </div>
+  <div class="risk-badge">{{ job.risk_level or "Unscored" }} RISK</div>
+</div>
+
+<!-- Executive Summary -->
+<div class="section">
+  <h2>Executive Summary</h2>
+  <div class="score-row">
+    <div class="score-circle">
+      <span class="num">{{ job.risk_score|int if job.risk_score else "—" }}</span>
+      <span class="lbl">/ 100</span>
+    </div>
+    <div class="summary-text">
+      {{ job.ai_summary or "Automated analysis complete. See vulnerability details below." }}
+    </div>
+  </div>
+  <p style="margin-bottom:12px;color:#555;">
+    {% if job.is_honeypot == true %}
+      ⚠️ <strong>HONEYPOT DETECTED</strong> — This contract exhibits honeypot characteristics. Users may be unable to withdraw funds.
+    {% elif job.is_honeypot == false %}
+      ✅ Honeypot simulation: <strong>No honeypot patterns detected</strong>.
+    {% else %}
+      ℹ️ Honeypot simulation was inconclusive or skipped.
+    {% endif %}
+  </p>
+
+  <div class="count-row">
+    <div class="count-card cc"><div class="n">{{ vuln_counts.critical }}</div><div class="t">Critical</div></div>
+    <div class="count-card ch"><div class="n">{{ vuln_counts.high }}</div><div class="t">High</div></div>
+    <div class="count-card cm"><div class="n">{{ vuln_counts.medium }}</div><div class="t">Medium</div></div>
+    <div class="count-card cl"><div class="n">{{ vuln_counts.low }}</div><div class="t">Low</div></div>
+    <div class="count-card ci"><div class="n">{{ vuln_counts.informational }}</div><div class="t">Info</div></div>
+  </div>
+</div>
+
+<!-- Vulnerability Details -->
+<div class="section">
+  <h2>Vulnerability Details</h2>
+
+  {% if vulnerabilities %}
+    {% for v in vulnerabilities %}
+    <div class="vuln-card">
+      <div class="vuln-header">
+        <span class="sev-badge sev-{{ v.severity }}">{{ v.severity }}</span>
+        <span class="vuln-title">{{ v.title }}</span>
+        {% if v.swc_id %}<span class="swc-tag">{{ v.swc_id }}</span>{% endif %}
+        <span class="tool-tag">{{ v.tool }}</span>
+      </div>
+      <div class="vuln-body">
+        <p>{{ v.description }}</p>
+        {% if v.file_path %}
+          <p><strong>Location:</strong> {{ v.file_path }}{% if v.line_numbers %} (line {{ v.line_numbers }}){% endif %}</p>
+        {% endif %}
+        {% if v.code_snippet %}
+          <div class="code-block">{{ v.code_snippet }}</div>
+        {% endif %}
+        {% if v.remediation %}
+          <div class="remediation">
+            <strong>Remediation:</strong> {{ v.remediation }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p style="color:#16a34a;font-weight:600;">✅ No vulnerabilities detected by automated tools.</p>
+  {% endif %}
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <p>Generated by Web3 Security Scanner • {{ job.created_at.strftime('%Y-%m-%d %H:%M UTC') }}</p>
+  <p style="margin-top:4px;">This report is for informational purposes only. Always conduct a manual audit before deployment.</p>
+</div>
+
+</body>
+</html>

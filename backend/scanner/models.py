@@ -1,0 +1,79 @@
+import uuid
+from django.db import models
+
+
+class ScanJob(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        FETCHING = "fetching", "Fetching Source"
+        ANALYZING = "analyzing", "Analyzing"
+        AI_REVIEW = "ai_review", "AI Review"
+        REPORTING = "reporting", "Generating Report"
+        COMPLETE = "complete", "Complete"
+        FAILED = "failed", "Failed"
+
+    class Network(models.TextChoices):
+        MAINNET = "mainnet", "Ethereum Mainnet"
+        POLYGON = "polygon", "Polygon"
+        BSC = "bsc", "Binance Smart Chain"
+        ARBITRUM = "arbitrum", "Arbitrum"
+        OPTIMISM = "optimism", "Optimism"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    address = models.CharField(max_length=42, db_index=True)
+    network = models.CharField(max_length=20, choices=Network.choices, default=Network.MAINNET)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    progress = models.IntegerField(default=0)  # 0-100
+    status_message = models.TextField(blank=True)
+
+    # Contract metadata (populated after fetch)
+    contract_name = models.CharField(max_length=255, blank=True)
+    compiler_version = models.CharField(max_length=50, blank=True)
+    source_code = models.TextField(blank=True)
+    abi = models.JSONField(null=True, blank=True)
+
+    # Scores
+    risk_score = models.FloatField(null=True, blank=True)
+    risk_level = models.CharField(max_length=20, blank=True)  # Low / Medium / High / Critical
+    is_honeypot = models.BooleanField(null=True, blank=True)
+
+    # Raw tool outputs (stored as JSON for traceability)
+    slither_output = models.JSONField(null=True, blank=True)
+    mythril_output = models.JSONField(null=True, blank=True)
+    tenderly_output = models.JSONField(null=True, blank=True)
+    ai_summary = models.TextField(blank=True)
+
+    error_detail = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.address} [{self.network}] — {self.status}"
+
+
+class Vulnerability(models.Model):
+    class Severity(models.TextChoices):
+        CRITICAL = "critical", "Critical"
+        HIGH = "high", "High"
+        MEDIUM = "medium", "Medium"
+        LOW = "low", "Low"
+        INFO = "informational", "Informational"
+
+    job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name="vulnerabilities")
+    swc_id = models.CharField(max_length=20, blank=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    severity = models.CharField(max_length=20, choices=Severity.choices)
+    confidence = models.CharField(max_length=20, blank=True)
+    file_path = models.CharField(max_length=500, blank=True)
+    line_numbers = models.CharField(max_length=100, blank=True)
+    code_snippet = models.TextField(blank=True)
+    remediation = models.TextField(blank=True)
+    tool = models.CharField(max_length=50, blank=True)  # slither | mythril | ai | manual
+    is_false_positive = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"[{self.severity.upper()}] {self.title} — {self.job.address}"
