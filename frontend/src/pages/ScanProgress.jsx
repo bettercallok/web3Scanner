@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { GradientHeading } from "../components/ui/gradient-heading";
 import axios from "axios";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
@@ -93,73 +94,120 @@ export default function ScanProgress() {
   const activeStep = getStepFromProgress(progress);
 
   return (
-    <>
-      <nav className="navbar">
-        <a href="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
-          Web3Scanner
-        </a>
-        <span className="nav-badge">SCANNING</span>
+
+    <div className="min-h-screen bg-background text-foreground selection:bg-purple-500/30 font-sans pb-24">
+      {/* Navbar */}
+      <nav className="sticky top-0 z-50 flex items-center justify-between px-6 py-4 backdrop-blur-md bg-background/80 border-b border-white/5">
+        <Link to="/" className="flex items-center gap-2 group">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20 group-hover:shadow-purple-500/40 transition-shadow">
+            <span className="text-white text-lg">🛡️</span>
+          </div>
+          <span className="font-bold text-xl tracking-tight hidden sm:block">Web3Scanner</span>
+        </Link>
+        <div className="px-3 py-1 text-xs font-semibold tracking-wider text-purple-300 uppercase bg-purple-500/10 border border-purple-500/20 rounded-full animate-pulse">
+          SCANNING
+        </div>
       </nav>
 
-      <div className="scan-page">
-        <div className="container">
-          <h1 style={{ fontSize: "24px", fontWeight: 800, marginBottom: "8px" }}>
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 pt-16">
+        <div className="text-center mb-12">
+          <GradientHeading size="lg" className="mb-4">
             🔍 Scanning Contract
-          </h1>
-          <div className="address-display">{id}</div>
+          </GradientHeading>
+          <p className="text-gray-400 flex items-center justify-center gap-2 font-mono text-sm bg-white/5 border border-white/10 w-fit mx-auto px-4 py-2 rounded-lg">
+            <span>Target:</span>
+            <span className="text-purple-300">{id}</span>
+          </p>
+        </div>
 
-          {error && (
-            <div className="card" style={{ borderColor: "rgba(239,68,68,0.4)", marginBottom: "24px" }}>
-              <div style={{ color: "var(--red)", fontWeight: 600 }}>❌ {error}</div>
-            </div>
-          )}
+        {error && (
+          <div className="mb-8 p-6 bg-red-500/10 border border-red-500/20 rounded-xl text-center">
+            <h3 className="text-red-400 font-semibold mb-2">Scan Error</h3>
+            <p className="text-red-300/80 text-sm mb-4">❌ {error}</p>
+            <Link to="/" className="inline-flex items-center justify-center px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors text-sm font-medium">
+              Try Another Scan
+            </Link>
+          </div>
+        )}
+
+        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 md:p-8 shadow-2xl relative overflow-hidden mb-8">
+          {/* Subtle animated background glow */}
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl"></div>
+          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl"></div>
 
           {/* Progress Bar */}
-          <div className="card progress-card">
-            <div className="progress-header">
-              <span className="progress-label">
+          <div className="relative z-10 mb-8 p-6 bg-black/40 border border-white/5 rounded-xl">
+            <div className="flex justify-between items-end mb-3">
+              <span className="text-sm font-semibold text-gray-300 tracking-wide uppercase">
                 {progress >= 100 ? "✅ Complete!" : PIPELINE_STEPS[Math.min(activeStep, 6)].label}
               </span>
-              <span className="progress-pct">{progress}%</span>
+              <span className="text-2xl font-mono font-bold text-white">{progress}%</span>
             </div>
-            <div className="progress-bar-track">
-              <div className="progress-bar-fill" style={{ width: `${progress}%` }} />
+            <div className="h-3 w-full bg-white/5 rounded-full overflow-hidden border border-white/10 relative">
+              <div
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-purple-500 to-cyan-500 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+              <div className="absolute top-0 left-0 h-full w-full bg-[linear-gradient(90deg,transparent_0%,rgba(255,255,255,0.2)_50%,transparent_100%)] animate-[shimmer_2s_infinite]" style={{ transform: 'translateX(-100%)' }} />
             </div>
           </div>
 
           {/* Pipeline Steps */}
-          <div className="card">
-            <div className="pipeline">
-              {PIPELINE_STEPS.map((step, i) => {
-                const isDone = i < activeStep;
-                const isActive = i === activeStep && progress < 100;
-                return (
-                  <div key={step.id} className="pipeline-step">
-                    <div className={`step-indicator ${isDone ? "step-done" : isActive ? "step-active" : "step-pending"}`}>
-                      {isDone ? "✓" : isActive ? "⟳" : i + 1}
-                    </div>
-                    <div>
-                      <div className="step-name" style={{ color: isDone ? "var(--green)" : isActive ? "var(--text-1)" : "var(--text-3)" }}>
-                        {step.label}
-                      </div>
-                      <div className="step-sub">{step.sub}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+          <div className="relative z-10 space-y-4">
+            {PIPELINE_STEPS.map((step, i) => {
+              const isDone = i < activeStep;
+              const isActive = i === activeStep && progress < 100;
 
-          {/* Live Log Feed */}
-          <div className="log-feed">
+              let bgClass = "bg-white/[0.02]";
+              let borderClass = "border-white/5";
+              let textClass = "text-gray-500";
+              let iconClass = "bg-white/5 text-gray-500 border-white/10";
+
+              if (isActive) {
+                bgClass = "bg-purple-500/5";
+                borderClass = "border-purple-500/30";
+                textClass = "text-white";
+                iconClass = "bg-purple-500/20 text-purple-400 border-purple-500/30";
+              } else if (isDone) {
+                bgClass = "bg-emerald-500/5";
+                borderClass = "border-emerald-500/20";
+                textClass = "text-emerald-400";
+                iconClass = "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
+              }
+
+              return (
+                <div key={step.id} className={`flex items-center gap-4 p-4 rounded-xl border ${bgClass} ${borderClass} transition-all duration-300`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm border ${iconClass} shrink-0`}>
+                    {isDone ? "✓" : isActive ? <span className="animate-spin text-lg">⟳</span> : i + 1}
+                  </div>
+                  <div>
+                    <div className={`font-semibold ${textClass}`}>
+                      {step.label}
+                    </div>
+                    <div className="text-sm text-gray-500">{step.sub}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Live Log Feed */}
+        <div className="bg-[#0d1117] border border-white/10 rounded-xl overflow-hidden shadow-2xl flex flex-col h-64 relative z-10">
+          <div className="px-4 py-2 bg-white/5 border-b border-white/10 text-xs font-mono text-gray-400 flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Execution Logs
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2 font-mono text-xs md:text-sm">
             {logs.map((log, i) => (
               typeof log === "string" ? (
-                <div key={i} className="log-line"><span className="log-msg">{log}</span></div>
+                <div key={i} className="text-gray-300">{log}</div>
               ) : (
-                <div key={i} className="log-line">
-                  <span className="log-time">[{log.time}]</span>
-                  <span className="log-msg">{log.msg}</span>
+                <div key={i} className="flex gap-3 text-gray-300">
+                  <span className="text-gray-500 shrink-0">[{log.time}]</span>
+                  <span className="text-emerald-400/80">{log.msg}</span>
                 </div>
               )
             ))}
@@ -167,6 +215,7 @@ export default function ScanProgress() {
           </div>
         </div>
       </div>
-    </>
+    </div>
+
   );
 }
