@@ -1,4 +1,4 @@
-# Python
+# ─── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -26,8 +26,10 @@ MANIFEST
 pip-log.txt
 pip-delete-this-directory.txt
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Django
+# ─── Django ───────────────────────────────────────────────────────
 *.log
 local_settings.py
 /backend/media/
@@ -36,44 +38,72 @@ local_settings.py
 /backend/db.sqlite3-journal
 /backend/static/
 /backend/venv/
+celerybeat-schedule
+celerybeat.pid
 
-# Environment variables
+# ─── Environment Variables ────────────────────────────────────────
 .env
 .env.local
 .env.*.local
-.env.example  # Comment this out if you want to track the example
+# .env.example is intentionally tracked
 
-# IDE / Editor
+# ─── IDE / Editors ───────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
 *.sublime-project
 *.sublime-workspace
+.cursor/
 
-# Node.js / Frontend
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.vite/
-dist/
-
-# Docker volumes & cache
-chroma_data/
-ollama_data/
-
-# OS
+# ─── macOS ────────────────────────────────────────────────────────
 .DS_Store
 .DS_Store?
 ._*
 .Spotlight-V100
 .Trashes
 ehthumbs.db
+Thumbs.db
 
-# Development
+# ─── Node.js / Frontend ───────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+.yarn/
+
+# Vite / Build outputs
+.vite/
+dist/
+dist-ssr/
+*.local
+
+# TypeScript cache
+*.tsbuildinfo
+
+# ─── Docker volumes & local data ─────────────────────────────────
+chroma_data/
+ollama_data/
+scan_tmp/
+
+# ─── Testing ─────────────────────────────────────────────────────
+coverage/
+.coverage
+htmlcov/
+.tox/
+
+# ─── Security ─────────────────────────────────────────────────────
+*.pem
+*.key
+*.p12
+secrets/
+
+# ─── Misc ─────────────────────────────────────────────────────────
 .venv.bak
-celerybeat-schedule
+tmp/
+*.tmp
+*.bak
