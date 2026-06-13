@@ -117,6 +117,23 @@ services:
     depends_on:
       - backend
 
+  # ─── Initial Data Ingestion ───────────────────────────────────
+  ingestion:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      chromadb:
+        condition: service_started
+      ollama:
+        condition: service_started
+    command: python manage.py ingest_knowledge --source all
+
 volumes:
   chroma_data:
   ollama_data:
