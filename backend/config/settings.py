@@ -142,7 +142,7 @@ CHROMA_PORT = env.int("CHROMA_PORT", default=8001)
 API_SECRET_KEY = env("API_SECRET_KEY", default="dev-api-key-change-in-prod")
 
 # ── Scan Workspace ────────────────────────────────────────────
-SCAN_TMP_DIR = "/tmp/web3scanner"
+SCAN_TMP_DIR = env("SCAN_TMP_DIR", default=str(BASE_DIR / "scan_tmp"))
 
 # ── Security Headers (production) ─────────────────────────────
 if not DEBUG:
