@@ -38,6 +38,7 @@ def generate_pdf_report(job) -> str:
         vulnerabilities=vulns,
         vuln_counts=vuln_counts,
         risk_color=_risk_color(job.risk_level),
+        network_display=job.get_network_display(),
     )
 
     media_dir = Path(settings.MEDIA_ROOT) / "reports"
