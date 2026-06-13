@@ -99,7 +99,7 @@ CELERY_TASK_ROUTES = {
 
 # ── REST Framework ────────────────────────────────────────────
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "DEFAULT_PERMISSION_CLASSES": ["scanner.permissions.HasAPIKey"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
@@ -132,6 +132,7 @@ OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://localhost:11434")
 OLLAMA_MODEL = env("OLLAMA_MODEL", default="codellama:7b")
 CHROMA_HOST = env("CHROMA_HOST", default="localhost")
 CHROMA_PORT = env.int("CHROMA_PORT", default=8001)
+API_SECRET_KEY = env("API_SECRET_KEY", default="dev-api-key-change-in-prod")
 
 # ── Scan Workspace ────────────────────────────────────────────
 SCAN_TMP_DIR = "/tmp/web3scanner"
