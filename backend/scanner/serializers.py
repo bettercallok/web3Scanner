@@ -63,10 +63,33 @@ class ScanCreateSerializer(serializers.Serializer):
 
 from .models import WatchedContract
 class WatchedContractSerializer(serializers.ModelSerializer):
+    last_scan_summary = serializers.SerializerMethodField()
+
     class Meta:
         model = WatchedContract
         fields = [
             "id", "address", "network", "label", "last_scanned", 
-            "last_bytecode_hash", "alert_on_new_vuln", "created_at"
+            "last_bytecode_hash", "alert_on_new_vuln", "created_at",
+            "last_scan_summary"
         ]
-        read_only_fields = ["id", "last_scanned", "last_bytecode_hash", "created_at"]
+        read_only_fields = ["id", "last_scanned", "last_bytecode_hash", "created_at", "last_scan_summary"]
+
+    def get_last_scan_summary(self, obj):
+        from .models import ScanJob
+        job = ScanJob.objects.filter(
+            user=obj.user,
+            address__iexact=obj.address,
+            network=obj.network,
+            status=ScanJob.Status.COMPLETE
+        ).order_by("-created_at").first()
+        
+        if job:
+            return {
+                "id": str(job.id),
+                "risk_score": job.risk_score,
+                "risk_level": job.risk_level,
+                "created_at": job.created_at,
+                "high_vulns": job.vulnerabilities.filter(severity="high").count(),
+                "critical_vulns": job.vulnerabilities.filter(severity="critical").count(),
+            }
+        return None
