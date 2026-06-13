@@ -74,6 +74,23 @@ class ScanJob(models.Model):
         return f"{self.address} [{self.network}] — {self.status}"
 
 
+class WatchedContract(models.Model):
+    user = models.ForeignKey("auth.User", on_delete=models.CASCADE, related_name="watchlist")
+    address = models.CharField(max_length=42)
+    network = models.CharField(max_length=20, choices=ScanJob.Network.choices)
+    label = models.CharField(max_length=100, blank=True)   # e.g. "My DEX Router"
+    last_scanned = models.DateTimeField(null=True, blank=True)
+    last_bytecode_hash = models.CharField(max_length=66, blank=True)  # detect upgrades
+    alert_on_new_vuln = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("user", "address", "network")
+
+    def __str__(self):
+        return f"[{self.network}] {self.label or self.address} — {self.user.username}"
+
+
 class Vulnerability(models.Model):
     class Severity(models.TextChoices):
         CRITICAL = "critical", "Critical"

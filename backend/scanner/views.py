@@ -99,3 +99,27 @@ class ReportChatView(APIView):
         reply = chat_with_report(job, message)
         
         return Response({"reply": reply}, status=status.HTTP_200_OK)
+
+
+from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from .models import WatchedContract
+from .serializers import WatchedContractSerializer
+
+class WatchlistView(generics.ListCreateAPIView):
+    serializer_class = WatchedContractSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return WatchedContract.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class WatchlistDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = WatchedContractSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return WatchedContract.objects.filter(user=self.request.user)

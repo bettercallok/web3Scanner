@@ -60,3 +60,13 @@ class ScanCreateSerializer(serializers.Serializer):
         choices=ScanJob.Network.choices,
         default=ScanJob.Network.MAINNET,
     )
+
+from .models import WatchedContract
+class WatchedContractSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WatchedContract
+        fields = [
+            "id", "address", "network", "label", "last_scanned", 
+            "last_bytecode_hash", "alert_on_new_vuln", "created_at"
+        ]
+        read_only_fields = ["id", "last_scanned", "last_bytecode_hash", "created_at"]

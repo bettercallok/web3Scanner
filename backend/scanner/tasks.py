@@ -362,3 +362,42 @@ def generate_report_task(self, job_id: str):
         logger.error(f"Report generation failed for {job_id}: {exc}")
         _update_job(job_id, status="complete", progress=100, status_message="Scan complete (PDF generation failed).")
         _push_progress(job_id, 100, "✅ Scan complete (PDF unavailable).")
+
+
+# ─────────────────────────────────────────────────────────────
+# Phase 4: Watchlist Monitoring Task
+# ─────────────────────────────────────────────────────────────
+@shared_task(queue="default")
+def check_watchlist_task():
+    """Daily task to check if any watched contracts have been upgraded."""
+    from .models import WatchedContract, ScanJob
+    from .services.etherscan import fetch_contract_source
+    from django.utils import timezone
+
+    watched_contracts = WatchedContract.objects.all()
+    for watched in watched_contracts:
+        try:
+            # We check if there is new source code or if it changed
+            source_code, source_files, compiler, name, is_proxy, impl_address = fetch_contract_source(
+                watched.address, watched.network
+            )
+            
+            # Simple check: if we haven't scanned it yet, or the hash doesn't match
+            current_hash = str(hash(source_code))
+            
+            if watched.last_bytecode_hash != current_hash:
+                logger.info(f"Watchlist: Upgraded detected for {watched.address}. Triggering scan.")
+                
+                # Auto-trigger a new scan
+                job = ScanJob.objects.create(
+                    address=watched.address.lower(),
+                    network=watched.network,
+                    user=watched.user,
+                )
+                run_full_scan.delay(str(job.id))
+                
+                watched.last_bytecode_hash = current_hash
+                watched.last_scanned = timezone.now()
+                watched.save()
+        except Exception as exc:
+            logger.error(f"Watchlist check failed for {watched.address}: {exc}")

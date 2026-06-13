@@ -52,7 +52,10 @@ export default function Dashboard() {
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h2>Your Scans</h2>
-        <Link to="/" className="btn btn-primary">+ New Scan</Link>
+        <div style={{ display: "flex", gap: 16 }}>
+          <Link to="/watchlist" className="btn btn-secondary">Portfolio Watchlist</Link>
+          <Link to="/" className="btn btn-primary">+ New Scan</Link>
+        </div>
       </div>
 
       {loading ? (
