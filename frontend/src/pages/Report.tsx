@@ -238,16 +238,38 @@ export default function Report() {
               {job.address} · {job.network}
               {job.compiler_version && ` · solc ${job.compiler_version}`}
             </div>
-            <a
-              id="download-pdf-btn"
-              href={`${API}/api/reports/${id}/pdf/`}
-              className="btn btn-outline"
-              style={{ fontSize: "13px", padding: "10px 20px" }}
-              target="_blank"
-              rel="noreferrer"
-            >
-              ↓ Download PDF Report
-            </a>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: "13px", padding: "10px 20px" }}
+                onClick={async () => {
+                  try {
+                    const res = await axios.post(`${API}/api/scans/${id}/toggle-public/`);
+                    if (res.data.is_public) {
+                      const url = `${window.location.origin}/r/${res.data.public_slug}`;
+                      navigator.clipboard.writeText(url);
+                      alert(`Public report link copied to clipboard!\n${url}`);
+                    } else {
+                      alert("Report is now private.");
+                    }
+                  } catch (err) {
+                    alert("Failed to toggle public sharing.");
+                  }
+                }}
+              >
+                🔗 Share Report
+              </button>
+              <a
+                id="download-pdf-btn"
+                href={`${API}/api/reports/${id}/pdf/`}
+                className="btn btn-outline"
+                style={{ fontSize: "13px", padding: "10px 20px" }}
+                target="_blank"
+                rel="noreferrer"
+              >
+                ↓ Download PDF Report
+              </a>
+            </div>
           </div>
 
           {/* Score + AI Summary */}

@@ -1,6 +1,7 @@
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.shortcuts import get_object_or_404
 
 from .models import ScanJob
@@ -152,3 +153,23 @@ class CallGraphView(APIView):
         ]
         
         return Response({"nodes": nodes, "links": edges}, status=status.HTTP_200_OK)
+
+class TogglePublicView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, job_id):
+        job = get_object_or_404(ScanJob, id=job_id, user=request.user)
+        job.is_public = not job.is_public
+        if job.is_public and not job.public_slug:
+            import uuid
+            job.public_slug = str(uuid.uuid4())[:8]
+        
+        job.share_label = request.data.get("share_label", job.share_label)
+        job.save()
+        return Response({"is_public": job.is_public, "public_slug": job.public_slug}, status=status.HTTP_200_OK)
+
+class PublicReportView(generics.RetrieveAPIView):
+    queryset = ScanJob.objects.filter(is_public=True)
+    serializer_class = ScanJobSerializer
+    lookup_field = "public_slug"
+    permission_classes = [AllowAny]

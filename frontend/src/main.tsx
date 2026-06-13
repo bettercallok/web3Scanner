@@ -13,6 +13,7 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Watchlist from "./pages/Watchlist";
 import Compare from "./pages/Compare";
+import PublicReport from "./pages/PublicReport";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
@@ -22,6 +23,7 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
           <Route path="/" element={<Home />} />
           <Route path="/scan/:id" element={<ScanProgress />} />
           <Route path="/report/:id" element={<Report />} />
+          <Route path="/r/:slug" element={<PublicReport />} />
           <Route path="/diff" element={<Diff />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

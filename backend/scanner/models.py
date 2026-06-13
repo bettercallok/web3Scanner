@@ -69,6 +69,11 @@ class ScanJob(models.Model):
     tenderly_output = models.JSONField(null=True, blank=True)
     ai_summary = models.TextField(blank=True)
 
+    # Phase 6: Public Reports
+    public_slug = models.SlugField(unique=True, null=True, blank=True)
+    is_public = models.BooleanField(default=False)
+    share_label = models.CharField(max_length=100, blank=True, help_text="Custom branding label for the public report")
+
     error_detail = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
