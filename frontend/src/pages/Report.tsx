@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
 import ReportChat from "../components/ReportChat";
+import VulnGraph from "../components/VulnGraph";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -270,19 +271,32 @@ export default function Report() {
             ))}
           </div>
 
-          {/* Filter Bar */}
-          <div className="filter-bar">
-            {(["all", ...SEV_ORDER] as const).map((f) => (
-              <button
-                key={f}
-                className={`filter-btn ${filter === f ? "active" : ""}`}
-                onClick={() => setFilter(f)}
-              >
-                {f === "all" ? "All" : SEV_LABELS[f]}
-                {f !== "all" && ` (${counts[f as Severity]})`}
-              </button>
-            ))}
+          {/* View Toggle */}
+          <div className="filter-bar" style={{ marginBottom: 12 }}>
+            <button className={`filter-btn ${filter === "all" && !job.graph_view ? "active" : ""}`} onClick={() => { setFilter("all"); }}>List View</button>
+            <button className={`filter-btn ${filter === "graph" ? "active" : ""}`} onClick={() => setFilter("graph")}>Graph View</button>
           </div>
+
+          {filter === "graph" ? (
+             <div className="card" style={{ padding: 24, marginBottom: 28 }}>
+                <h3 style={{ marginBottom: 16 }}>// CALL GRAPH & VULNERABLE PATHS</h3>
+                {id && <VulnGraph jobId={id} />}
+             </div>
+          ) : (
+            <>
+              {/* Filter Bar */}
+              <div className="filter-bar">
+                {(["all", ...SEV_ORDER] as const).map((f) => (
+                  <button
+                    key={f}
+                    className={`filter-btn ${filter === f ? "active" : ""}`}
+                    onClick={() => setFilter(f)}
+                  >
+                    {f === "all" ? "All Findings" : SEV_LABELS[f]}
+                    {f !== "all" && ` (${counts[f as Severity]})`}
+                  </button>
+                ))}
+              </div>
 
           {/* Vulnerabilities */}
           {filtered.length === 0 ? (
@@ -300,6 +314,8 @@ export default function Report() {
             filtered
               .sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity))
               .map((v) => <VulnCard key={v.id} vuln={v} />)
+          )}
+          </>
           )}
         </div>
       </div>
