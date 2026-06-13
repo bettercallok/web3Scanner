@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "scanner",
     "reports",
     "ai_engine",
+    "accounts",
 ]
 
 MIDDLEWARE = [
@@ -68,14 +69,7 @@ TEMPLATES = [
 
 # ── Database ──────────────────────────────────────────────────
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
-        "OPTIONS": {
-            "timeout": 20,
-            "check_same_thread": False,
-        },
-    }
+    "default": env.db("DATABASE_URL", default=f"sqlite:///{BASE_DIR}/db.sqlite3")
 }
 
 # ── Channel Layers (WebSocket via Redis) ──────────────────────
@@ -103,7 +97,10 @@ CELERY_TASK_ROUTES = {
 
 # ── REST Framework ────────────────────────────────────────────
 REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["scanner.permissions.HasAPIKey"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
@@ -112,6 +109,14 @@ REST_FRAMEWORK = {
         "anon": "20/hour",
         "burst": "5/minute",
     },
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=24),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "ROTATE_REFRESH_TOKENS": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 # ── CORS ──────────────────────────────────────────────────────

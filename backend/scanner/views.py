@@ -16,9 +16,11 @@ class ScanCreateView(APIView):
         if not ser.is_valid():
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+        user = request.user if request.user.is_authenticated else None
         job = ScanJob.objects.create(
             address=ser.validated_data["address"].lower(),
             network=ser.validated_data["network"],
+            user=user,
         )
 
         # Enqueue the full pipeline

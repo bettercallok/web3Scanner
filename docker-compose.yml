@@ -11,6 +11,22 @@ services:
       timeout: 5s
       retries: 5
 
+  # ─── PostgreSQL (Database) ───────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: web3scanner
+      POSTGRES_USER: web3scanner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-web3scanner_pass_123}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U web3scanner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # ─── ChromaDB (vector store for RAG) ─────────────────────────
   chromadb:
     image: chromadb/chroma:0.5.0
@@ -54,6 +70,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
       chromadb:
         condition: service_started
     command: >
@@ -78,6 +96,8 @@ services:
       - scan_tmp:/tmp/web3scanner
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       backend:
         condition: service_started
@@ -138,3 +158,4 @@ volumes:
   chroma_data:
   ollama_data:
   scan_tmp:
+  pg_data:

@@ -20,6 +20,7 @@ class ScanJob(models.Model):
         OPTIMISM = "optimism", "Optimism"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="scans")
     address = models.CharField(max_length=42, db_index=True)
     network = models.CharField(max_length=20, choices=Network.choices, default=Network.MAINNET)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
