@@ -123,3 +123,32 @@ class WatchlistDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return WatchedContract.objects.filter(user=self.request.user)
+
+class CallGraphView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, job_id):
+        job = get_object_or_404(ScanJob, id=job_id)
+        # In a real implementation, we would parse Slither's call-graph output.
+        # For this Phase 6 demo, we'll return a mock graph structure of the contract.
+        
+        nodes = [
+            {"id": "Contract", "group": 1},
+            {"id": "deposit()", "group": 2},
+            {"id": "withdraw()", "group": 2, "vulnerable": True},
+            {"id": "transfer()", "group": 2},
+            {"id": "balanceOf", "group": 3},
+            {"id": "owner", "group": 3},
+        ]
+        
+        edges = [
+            {"source": "Contract", "target": "deposit()"},
+            {"source": "Contract", "target": "withdraw()"},
+            {"source": "Contract", "target": "transfer()"},
+            {"source": "deposit()", "target": "balanceOf"},
+            {"source": "withdraw()", "target": "balanceOf"},
+            {"source": "withdraw()", "target": "owner"},
+            {"source": "transfer()", "target": "balanceOf"},
+        ]
+        
+        return Response({"nodes": nodes, "links": edges}, status=status.HTTP_200_OK)
