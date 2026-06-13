@@ -17,7 +17,16 @@ def run_slither(source_code: str, compiler_version: str, job_id: str) -> dict:
     Run Slither on a Solidity source code string.
     Returns the raw Slither JSON output dict.
     """
+    import uuid
+    try:
+        uuid.UUID(str(job_id))
+    except ValueError:
+        raise ValueError(f"Invalid job_id: {job_id}")
+
     work_dir = os.path.join(settings.SCAN_TMP_DIR, str(job_id))
+    work_dir = os.path.realpath(work_dir)
+    assert work_dir.startswith(os.path.realpath(settings.SCAN_TMP_DIR)), "Path traversal detected"
+
     os.makedirs(work_dir, exist_ok=True)
     sol_file = os.path.join(work_dir, "contract.sol")
 
