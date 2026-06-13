@@ -1,4 +1,4 @@
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -8,6 +8,13 @@ from .models import ScanJob
 from .serializers import ScanCreateSerializer, ScanJobSerializer
 from .tasks import run_full_scan
 
+class ScanListView(generics.ListAPIView):
+    """GET /api/scans/ — List user's scans."""
+    serializer_class = ScanJobSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ScanJob.objects.filter(user=self.request.user)
 
 class ScanCreateView(APIView):
     """POST /api/scans/ — Submit a contract for scanning."""
@@ -133,10 +140,12 @@ class CallGraphView(APIView):
         # In a real implementation, we would parse Slither's call-graph output.
         # For this Phase 6 demo, we'll return a mock graph structure of the contract.
         
+        has_vulns = job.vulnerabilities.filter(is_false_positive=False).exists()
+        
         nodes = [
             {"id": "Contract", "group": 1},
             {"id": "deposit()", "group": 2},
-            {"id": "withdraw()", "group": 2, "vulnerable": True},
+            {"id": "withdraw()", "group": 2, "vulnerable": has_vulns},
             {"id": "transfer()", "group": 2},
             {"id": "balanceOf", "group": 3},
             {"id": "owner", "group": 3},

@@ -1,7 +1,8 @@
 from django.urls import path
-from .views import ScanCreateView, ScanDetailView, DiffView, ReportChatView, WatchlistView, WatchlistDetailView, CallGraphView, TogglePublicView, PublicReportView
+from .views import ScanListView, ScanCreateView, ScanDetailView, DiffView, ReportChatView, WatchlistView, WatchlistDetailView, CallGraphView, TogglePublicView, PublicReportView
 
 urlpatterns = [
+    path("scans/", ScanListView.as_view(), name="scan-list"),
     path("scans/create/", ScanCreateView.as_view(), name="scan-create"),
     path("scans/<uuid:job_id>/", ScanDetailView.as_view(), name="scan-detail"),
     path("scans/<uuid:job_id>/chat/", ReportChatView.as_view(), name="scan-chat"),
