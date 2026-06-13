@@ -264,6 +264,14 @@ def generate_report_task(self, job_id: str):
 
     try:
         generate_pdf_report(job)
+        
+        # Cleanup temp directory
+        import os
+        import shutil
+        from django.conf import settings
+        work_dir = os.path.join(settings.SCAN_TMP_DIR, str(job_id))
+        shutil.rmtree(work_dir, ignore_errors=True)
+        
         _update_job(job_id, status="complete", progress=100, status_message="Scan complete!")
         _push_progress(job_id, 100, "✅ Scan complete! Report is ready.")
     except Exception as exc:
