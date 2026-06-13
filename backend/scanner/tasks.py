@@ -37,6 +37,7 @@ def run_full_scan(self, job_id: str):
             fetch_contract_task.si(job_id),
             run_slither_task.si(job_id),
             run_mythril_task.si(job_id),
+            run_gas_analysis_task.si(job_id),
             run_honeypot_task.si(job_id),
             run_ai_analysis_task.si(job_id),
             calculate_risk_score_task.si(job_id),
@@ -192,6 +193,55 @@ def run_mythril_task(self, job_id: str):
         logger.error(f"Mythril failed for job {job_id}: {exc}")
         _update_job(job_id, mythril_output={"error": str(exc)}, progress=60)
         _push_progress(job_id, 60, f"Mythril warning: {exc}")
+
+
+# ─────────────────────────────────────────────────────────────
+# Step 3.5: Gas Optimization Analysis
+# ─────────────────────────────────────────────────────────────
+@shared_task(bind=True, max_retries=1, queue="analysis")
+def run_gas_analysis_task(self, job_id: str):
+    from .models import ScanJob, GasIssue
+    from .services.gas_analyzer import run_gas_analysis
+
+    job = ScanJob.objects.get(id=job_id)
+    if job.analysis_mode != ScanJob.AnalysisMode.SOURCE:
+        _push_progress(job_id, 62, "Skipping gas analysis (source code required).")
+        return
+
+    _update_job(job_id, progress=62, status_message="Running Gas Optimization Analysis...")
+    _push_progress(job_id, 62, "Running Gas Optimization Analysis...")
+
+    try:
+        issues = run_gas_analysis(
+            job.source_code,
+            job.compiler_version,
+            job_id,
+            source_map=job.source_files,
+        )
+
+        gas_objs = []
+        for i in issues:
+            gas_objs.append(GasIssue(
+                job=job,
+                title=i["title"],
+                description=i["description"],
+                detector=i["detector"],
+                impact=i["impact"],
+                file_path=i["file_path"],
+                line_numbers=i["line_numbers"],
+                code_snippet=i["snippet"],
+                estimated_gas_saving=i["estimated_gas_saving"],
+            ))
+        
+        if gas_objs:
+            GasIssue.objects.bulk_create(gas_objs)
+            _push_progress(job_id, 64, f"Found {len(gas_objs)} gas optimization opportunities.")
+        else:
+            _push_progress(job_id, 64, "Gas analysis complete. No major inefficiencies found.")
+
+    except Exception as exc:
+        logger.error(f"Gas analysis failed for {job_id}: {exc}")
+        _push_progress(job_id, 64, f"Gas analysis warning: {exc}")
 
 
 # ─────────────────────────────────────────────────────────────

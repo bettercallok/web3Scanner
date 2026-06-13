@@ -96,3 +96,20 @@ class Vulnerability(models.Model):
 
     def __str__(self):
         return f"[{self.severity.upper()}] {self.title} — {self.job.address}"
+
+
+class GasIssue(models.Model):
+    """Gas optimization opportunity found by Slither gas-specific detectors."""
+
+    job = models.ForeignKey(ScanJob, on_delete=models.CASCADE, related_name="gas_issues")
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    detector = models.CharField(max_length=100, blank=True)   # slither detector key
+    impact = models.CharField(max_length=20, blank=True)       # optimization|low|medium
+    file_path = models.CharField(max_length=500, blank=True)
+    line_numbers = models.CharField(max_length=100, blank=True)
+    code_snippet = models.TextField(blank=True)
+    estimated_gas_saving = models.IntegerField(default=0)       # rough estimate in gas units
+
+    def __str__(self):
+        return f"[GAS] {self.title} — {self.job.address}"
