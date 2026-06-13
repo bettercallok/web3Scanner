@@ -62,16 +62,32 @@ def fetch_contract_task(self, job_id: str):
 
     try:
         data = fetch_contract_source(job.address, job.network)
+
+        # Detect proxy pattern
+        from .services.proxy_resolver import detect_and_resolve_proxy
+        proxy_info = detect_and_resolve_proxy(
+            job.address, job.network, data.get("etherscan_raw", {})
+        )
+
         _update_job(
             job_id,
             source_code=data.get("source_code", ""),
+            source_files=data.get("source_map"),
             abi=data.get("abi"),
             contract_name=data.get("contract_name", ""),
             compiler_version=data.get("compiler_version", ""),
+            is_proxy=proxy_info["is_proxy"],
+            proxy_type=proxy_info["proxy_type"],
+            proxy_address=job.address if proxy_info["is_proxy"] else "",
+            implementation_address=proxy_info["implementation_address"],
             status_message="Source code fetched successfully.",
             progress=15,
         )
-        _push_progress(job_id, 15, f"Source fetched: {data.get('contract_name', job.address)}")
+
+        label = data.get('contract_name', job.address)
+        if proxy_info["is_proxy"]:
+            label += f" [PROXY → {proxy_info['implementation_address'][:10]}...]"
+        _push_progress(job_id, 15, f"Source fetched: {label}")
     except Exception as exc:
         _update_job(job_id, status="failed", error_detail=f"Fetch failed: {exc}")
         raise self.retry(exc=exc, countdown=5)
@@ -91,7 +107,7 @@ def run_slither_task(self, job_id: str):
     _push_progress(job_id, 25, "Running Slither static analysis...")
 
     try:
-        raw = run_slither(job.source_code, job.compiler_version, job_id)
+        raw = run_slither(job.source_code, job.compiler_version, job_id, source_map=job.source_files)
         parsed = parse_slither_output(raw)
         _update_job(job_id, slither_output=raw, progress=40, status_message="Slither analysis complete.")
 

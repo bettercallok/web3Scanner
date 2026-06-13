@@ -14,6 +14,10 @@ class VulnerabilitySerializer(serializers.ModelSerializer):
 
 class ScanJobSerializer(serializers.ModelSerializer):
     vulnerabilities = VulnerabilitySerializer(many=True, read_only=True)
+    source_file_count = serializers.SerializerMethodField()
+
+    def get_source_file_count(self, obj):
+        return len(obj.source_files) if obj.source_files else 1
 
     class Meta:
         model = ScanJob
@@ -21,13 +25,17 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "id", "address", "network", "status", "progress",
             "status_message", "contract_name", "compiler_version",
             "risk_score", "risk_level", "is_honeypot",
+            "is_proxy", "proxy_type", "proxy_address", "implementation_address",
+            "source_file_count",
             "ai_summary", "error_detail",
             "created_at", "updated_at", "vulnerabilities",
         ]
         read_only_fields = [
             "id", "status", "progress", "status_message",
             "contract_name", "compiler_version", "risk_score",
-            "risk_level", "is_honeypot", "ai_summary", "error_detail",
+            "risk_level", "is_honeypot", "is_proxy", "proxy_type",
+            "proxy_address", "implementation_address", "source_file_count",
+            "ai_summary", "error_detail",
             "created_at", "updated_at",
         ]
 

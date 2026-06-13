@@ -30,12 +30,19 @@ class ScanJob(models.Model):
     contract_name = models.CharField(max_length=255, blank=True)
     compiler_version = models.CharField(max_length=50, blank=True)
     source_code = models.TextField(blank=True)
+    source_files = models.JSONField(null=True, blank=True)   # {filename: content} multi-file map
     abi = models.JSONField(null=True, blank=True)
 
     # Scores
     risk_score = models.FloatField(null=True, blank=True)
     risk_level = models.CharField(max_length=20, blank=True)  # Low / Medium / High / Critical
     is_honeypot = models.BooleanField(null=True, blank=True)
+
+    # Proxy contract detection
+    is_proxy = models.BooleanField(null=True, blank=True)
+    proxy_type = models.CharField(max_length=20, blank=True)  # transparent|eip1967|oz_legacy
+    proxy_address = models.CharField(max_length=42, blank=True)
+    implementation_address = models.CharField(max_length=42, blank=True)
 
     # Raw tool outputs (stored as JSON for traceability)
     slither_output = models.JSONField(null=True, blank=True)
