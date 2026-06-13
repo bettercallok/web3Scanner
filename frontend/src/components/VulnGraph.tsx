@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { ForceGraph2D } from "react-force-graph-2d";
+import ForceGraph2D from "react-force-graph-2d";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
