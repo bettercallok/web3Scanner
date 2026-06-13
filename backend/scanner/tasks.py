@@ -358,6 +358,21 @@ def generate_report_task(self, job_id: str):
         
         _update_job(job_id, status="complete", progress=100, status_message="Scan complete!")
         _push_progress(job_id, 100, "✅ Scan complete! Report is ready.")
+
+        # Update WatchedContract last_scanned if it exists
+        try:
+            from django.utils import timezone
+            from .models import WatchedContract
+            job.refresh_from_db()
+            if job.user:
+                WatchedContract.objects.filter(
+                    user=job.user, 
+                    address__iexact=job.address, 
+                    network=job.network
+                ).update(last_scanned=timezone.now())
+        except Exception as e:
+            logger.error(f"Failed to update watchlist last_scanned: {e}")
+
     except Exception as exc:
         logger.error(f"Report generation failed for {job_id}: {exc}")
         _update_job(job_id, status="complete", progress=100, status_message="Scan complete (PDF generation failed).")
