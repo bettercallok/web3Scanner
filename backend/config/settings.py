@@ -35,6 +35,7 @@ INSTALLED_APPS = [
     "reports",
     "ai_engine",
     "accounts",
+    "notifications",
 ]
 
 MIDDLEWARE = [

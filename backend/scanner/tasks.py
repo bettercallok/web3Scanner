@@ -363,6 +363,21 @@ def generate_report_task(self, job_id: str):
         _update_job(job_id, status="complete", progress=100, status_message="Scan complete (PDF generation failed).")
         _push_progress(job_id, 100, "✅ Scan complete (PDF unavailable).")
 
+    # Trigger notifications if user exists and risk score is set
+    job.refresh_from_db()
+    if job.user and job.risk_level:
+        try:
+            from notifications.services import send_alert
+            frontend_url = getattr(settings, "FRONTEND_URL", "http://localhost:3000")
+            send_alert(
+                user=job.user,
+                subject=f"Scan Complete: {job.address} ({job.risk_level} Risk)",
+                message=f"Your scan for {job.address} is complete.\nRisk Score: {job.risk_score}/100\nView Report: {frontend_url}/report/{job.id}",
+                risk_level=job.risk_level
+            )
+        except Exception as exc:
+            logger.error(f"Failed to trigger notifications for {job_id}: {exc}")
+
 
 # ─────────────────────────────────────────────────────────────
 # Phase 4: Watchlist Monitoring Task
