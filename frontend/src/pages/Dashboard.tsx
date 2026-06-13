@@ -112,7 +112,7 @@ export default function Dashboard() {
                     {new Date(scan.created_at).toLocaleDateString()}
                   </td>
                   <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                    <Link to={`/reports/${scan.id}`} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: 12 }}>View</Link>
+                    <Link to={`/report/${scan.id}`} className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: 12 }}>View</Link>
                   </td>
                 </tr>
               ))}
