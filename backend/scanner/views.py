@@ -39,10 +39,4 @@ class ScanDetailView(APIView):
         return Response(ser.data)
 
 
-class ScanListView(APIView):
-    """GET /api/scans/ — List recent scans."""
 
-    def get(self, request):
-        jobs = ScanJob.objects.all()[:20]
-        ser = ScanJobSerializer(jobs, many=True)
-        return Response(ser.data)
