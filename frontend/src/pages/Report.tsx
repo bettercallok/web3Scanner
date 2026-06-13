@@ -70,7 +70,7 @@ export default function Report() {
     <>
       <nav className="navbar">
         <a href="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
+
           WEB3<span className="logo-dot">.</span>SCANNER
         </a>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>

@@ -112,7 +112,7 @@ export default function ScanProgress() {
     <>
       <nav className="navbar">
         <a href="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
+
           WEB3<span className="logo-dot">.</span>SCANNER
         </a>
         <span className="nav-badge">SCANNING</span>

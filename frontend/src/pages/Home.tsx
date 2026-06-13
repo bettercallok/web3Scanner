@@ -96,7 +96,6 @@ export default function Home() {
       {/* Navbar */}
       <nav className="navbar">
         <a href="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
           WEB3<span className="logo-dot">.</span>SCANNER
         </a>
         <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
@@ -108,7 +107,6 @@ export default function Home() {
       {/* Hero */}
       <section className="hero">
         <div className="container hero-inner">
-          <div className="hero-eyebrow">⚡ CodeLlama · Slither · Mythril · Honeypot Sim</div>
           <h1 className="hero-title">
             <span className="title-line-1">AUDIT SMART</span>
             <span className="title-line-2">CONTRACTS</span>

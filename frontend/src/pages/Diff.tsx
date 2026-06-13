@@ -157,7 +157,7 @@ export default function Diff() {
       {/* Navbar */}
       <nav className="navbar">
         <Link to="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
+
           WEB3<span className="logo-dot">.</span>SCANNER
         </Link>
         <span className="nav-badge">DIFF</span>

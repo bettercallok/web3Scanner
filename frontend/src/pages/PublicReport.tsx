@@ -53,7 +53,7 @@ export default function PublicReport() {
     <>
       <nav className="navbar">
         <a href="/" className="navbar-logo">
-          <div className="logo-icon">🛡️</div>
+
           {job.share_label || "WEB3.SCANNER"}
         </a>
       </nav>
