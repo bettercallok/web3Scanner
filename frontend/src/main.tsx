@@ -14,22 +14,23 @@ import Dashboard from "./pages/Dashboard";
 import Watchlist from "./pages/Watchlist";
 import Compare from "./pages/Compare";
 import PublicReport from "./pages/PublicReport";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/scan/:id" element={<ScanProgress />} />
-          <Route path="/report/:id" element={<Report />} />
+          <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+          <Route path="/scan/:id" element={<ProtectedRoute><ScanProgress /></ProtectedRoute>} />
+          <Route path="/report/:id" element={<ProtectedRoute><Report /></ProtectedRoute>} />
           <Route path="/r/:slug" element={<PublicReport />} />
-          <Route path="/diff" element={<Diff />} />
+          <Route path="/diff" element={<ProtectedRoute><Diff /></ProtectedRoute>} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/watchlist" element={<Watchlist />} />
-          <Route path="/compare" element={<Compare />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>} />
+          <Route path="/compare" element={<ProtectedRoute><Compare /></ProtectedRoute>} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
