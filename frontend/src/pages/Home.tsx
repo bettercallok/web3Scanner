@@ -61,7 +61,18 @@ export default function Home() {
     e.preventDefault();
     setError("");
 
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    if (network === "solana" && address.length < 32) {
+      setError("Please enter a valid Solana program ID.");
+      return;
+    } else if (network === "aptos" || network === "sui") {
+      if (!address.startsWith("0x")) {
+        setError("Please enter a valid Move module address (0x...).");
+        return;
+      }
+    } else if (network === "ton" && address.length < 48) {
+      setError("Please enter a valid TON address.");
+      return;
+    } else if (!["solana", "aptos", "sui", "ton"].includes(network) && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       setError("Please enter a valid Ethereum contract address (0x + 40 hex chars).");
       return;
     }
@@ -141,6 +152,10 @@ export default function Home() {
                     <option value="bsc">Binance Smart Chain</option>
                     <option value="arbitrum">Arbitrum</option>
                     <option value="optimism">Optimism</option>
+                    <option value="solana">Solana</option>
+                    <option value="aptos">Aptos</option>
+                    <option value="sui">Sui</option>
+                    <option value="ton">TON</option>
                   </select>
                   <button
                     id="scan-submit-btn"

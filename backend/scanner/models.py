@@ -13,11 +13,17 @@ class ScanJob(models.Model):
         FAILED = "failed", "Failed"
 
     class Network(models.TextChoices):
+        # EVM
         MAINNET = "mainnet", "Ethereum Mainnet"
         POLYGON = "polygon", "Polygon"
         BSC = "bsc", "Binance Smart Chain"
         ARBITRUM = "arbitrum", "Arbitrum"
         OPTIMISM = "optimism", "Optimism"
+        # Non-EVM
+        SOLANA = "solana", "Solana"
+        APTOS = "aptos", "Aptos"
+        SUI = "sui", "Sui"
+        TON = "ton", "TON"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.ForeignKey("auth.User", null=True, blank=True, on_delete=models.SET_NULL, related_name="scans")
