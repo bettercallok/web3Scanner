@@ -7,15 +7,25 @@ import Report from "./pages/Report";
 import Diff from "./pages/Diff";
 import "./index.css";
 
+import { AuthProvider } from "./context/AuthContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/scan/:id" element={<ScanProgress />} />
-        <Route path="/report/:id" element={<Report />} />
-        <Route path="/diff" element={<Diff />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/scan/:id" element={<ScanProgress />} />
+          <Route path="/report/:id" element={<Report />} />
+          <Route path="/diff" element={<Diff />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   </React.StrictMode>
 );

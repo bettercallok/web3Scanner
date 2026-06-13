@@ -205,13 +205,16 @@ export default function Report() {
           <div className="logo-icon">🛡️</div>
           WEB3<span className="logo-dot">.</span>SCANNER
         </a>
-        <Link
-          to="/"
-          className="btn btn-secondary"
-          style={{ padding: "8px 18px", fontSize: "13px" }}
-        >
-          ← New Scan
-        </Link>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <Link
+            to="/"
+            className="btn btn-secondary"
+            style={{ padding: "8px 18px", fontSize: "13px" }}
+          >
+            ← New Scan
+          </Link>
+          <Link to="/dashboard" style={{ color: "var(--text-1)", textDecoration: "none", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>Dashboard</Link>
+        </div>
       </nav>
 
       <div className="report-page">

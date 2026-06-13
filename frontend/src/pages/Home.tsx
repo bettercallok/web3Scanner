@@ -1,5 +1,5 @@
 import React, { useState, FormEvent, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import axios from "axios";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
@@ -88,7 +88,10 @@ export default function Home() {
           <div className="logo-icon">🛡️</div>
           WEB3<span className="logo-dot">.</span>SCANNER
         </a>
-        <span className="nav-badge">AI-POWERED</span>
+        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+          <span className="nav-badge">AI-POWERED</span>
+          <Link to="/dashboard" style={{ color: "var(--text-1)", textDecoration: "none", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>Dashboard</Link>
+        </div>
       </nav>
 
       {/* Hero */}
