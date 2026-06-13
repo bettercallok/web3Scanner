@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "ai_engine",
     "accounts",
     "notifications",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -110,6 +111,7 @@ REST_FRAMEWORK = {
         "anon": "20/hour",
         "burst": "5/minute",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
 
 from datetime import timedelta
