@@ -304,6 +304,7 @@ def run_ai_analysis_task(self, job_id: str):
                 remediation=v.get("remediation", ""),
                 tool="ai",
                 swc_id=v.get("swc_id", ""),
+                poc_code=v.get("poc_code", ""),
             )
 
         for fp_title in result.get("false_positives", []):

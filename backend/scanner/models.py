@@ -94,6 +94,10 @@ class Vulnerability(models.Model):
     tool = models.CharField(max_length=50, blank=True)  # slither | mythril | ai | manual
     is_false_positive = models.BooleanField(default=False)
 
+    # Exploit PoC Generation
+    poc_code = models.TextField(blank=True)       # Foundry test code
+    poc_verified = models.BooleanField(default=False)
+
     def __str__(self):
         return f"[{self.severity.upper()}] {self.title} — {self.job.address}"
 

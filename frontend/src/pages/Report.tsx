@@ -28,6 +28,7 @@ interface Vulnerability {
   swc_id?: string;
   tool?: string;
   is_false_positive?: boolean;
+  poc_code?: string;
 }
 
 interface ScanJob {
@@ -122,6 +123,16 @@ function VulnCard({ vuln }: { vuln: Vulnerability }) {
             <div className="remediation-box">
               <div className="rem-label">✔ Remediation</div>
               <p>{vuln.remediation}</p>
+            </div>
+          )}
+          {vuln.poc_code && (
+            <div className="poc-box" style={{ marginTop: 16, background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: 16 }}>
+              <div className="poc-label" style={{ color: "#ff6b1a", fontSize: 12, fontWeight: "bold", marginBottom: 8, fontFamily: "'JetBrains Mono', monospace" }}>
+                🧪 AUTO-GENERATED FOUNDRY POC
+              </div>
+              <pre className="code-block" style={{ margin: 0, padding: 12, background: "#0d0d0d", borderRadius: 4 }}>
+                <code>{vuln.poc_code}</code>
+              </pre>
             </div>
           )}
         </div>

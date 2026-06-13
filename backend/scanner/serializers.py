@@ -9,6 +9,7 @@ class VulnerabilitySerializer(serializers.ModelSerializer):
             "id", "swc_id", "title", "description", "severity",
             "confidence", "file_path", "line_numbers", "code_snippet",
             "remediation", "tool", "is_false_positive",
+            "poc_code", "poc_verified",
         ]
 
 

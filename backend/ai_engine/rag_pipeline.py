@@ -40,6 +40,21 @@ Respond ONLY in valid JSON with this exact schema:
 """
 
 
+_POC_PROMPT = """You are an elite smart contract security researcher.
+Generate a complete, self-contained Foundry (forge) test contract that demonstrates the following vulnerability.
+Vulnerability Title: {title}
+Description: {description}
+
+Target Contract Source:
+```solidity
+{source_code}
+```
+
+Return ONLY the raw Solidity test code, starting with `// SPDX-License-Identifier:` or `pragma solidity`.
+Do not include markdown formatting (e.g. ```solidity), explanations, or any other text.
+"""
+
+
 def analyze_with_rag(source_code: str, slither_findings: dict, mythril_findings: dict) -> dict:
     """
     Run the full RAG pipeline:
@@ -115,7 +130,22 @@ Analyze this contract and respond with the JSON schema defined in your instructi
 
     try:
         response = llm.invoke(_SYSTEM_PROMPT + "\n\n" + user_message)
-        return _parse_llm_response(response)
+        result = _parse_llm_response(response)
+        
+        # Phase 2: Generate PoC for High/Critical vulnerabilities
+        for v in result.get("vulnerabilities", []):
+            if v.get("severity", "").lower() in ["critical", "high"]:
+                try:
+                    logger.info(f"Generating PoC for {v.get('title')}")
+                    poc_code = generate_poc(v, source_code)
+                    v["poc_code"] = poc_code
+                except Exception as e:
+                    logger.error(f"Failed to generate PoC for {v.get('title')}: {e}")
+                    v["poc_code"] = ""
+            else:
+                v["poc_code"] = ""
+                
+        return result
     except Exception as e:
         logger.error(f"LLM inference failed: {e}")
         return {
@@ -123,6 +153,36 @@ Analyze this contract and respond with the JSON schema defined in your instructi
             "vulnerabilities": [],
             "false_positives": [],
         }
+
+
+def generate_poc(vuln: dict, source_code: str) -> str:
+    """Generate a Foundry PoC for a specific vulnerability."""
+    from langchain_community.llms import Ollama
+    llm = Ollama(
+        base_url=settings.OLLAMA_BASE_URL,
+        model=settings.OLLAMA_MODEL,
+        temperature=0.2, # slightly higher temp for code gen
+        timeout=300,
+    )
+    
+    prompt = _POC_PROMPT.format(
+        title=vuln.get("title", "Unknown"),
+        description=vuln.get("description", "Unknown"),
+        source_code=source_code[:5000] # Cap source to avoid token limits
+    )
+    
+    response = llm.invoke(prompt)
+    
+    # Clean up response: remove markdown formatting if the model still included it
+    response = response.strip()
+    if response.startswith("```solidity"):
+        response = response[11:]
+    elif response.startswith("```"):
+        response = response[3:]
+    if response.endswith("```"):
+        response = response[:-3]
+        
+    return response.strip()
 
 
 def _summarize_findings(findings: dict | None, tool: str) -> str:
