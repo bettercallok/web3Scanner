@@ -77,3 +77,23 @@ class DiffView(APIView):
         from .services.differ import diff_scan_jobs
         result = diff_scan_jobs(job_a, job_b)
         return Response(result, status=status.HTTP_200_OK)
+
+
+class ReportChatView(APIView):
+    """
+    POST /api/scans/{id}/chat/ — Ask questions about the report.
+    Body: { "message": "Explain the reentrancy..." }
+    """
+    def post(self, request, job_id):
+        message = request.data.get("message")
+        if not message:
+            return Response({"detail": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        job = get_object_or_404(ScanJob, id=job_id)
+        if job.status != ScanJob.Status.COMPLETE:
+            return Response({"detail": "Scan must be complete to chat."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from .services.chat_engine import chat_with_report
+        reply = chat_with_report(job, message)
+        
+        return Response({"reply": reply}, status=status.HTTP_200_OK)

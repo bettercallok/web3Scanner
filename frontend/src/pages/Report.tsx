@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import axios from "axios";
+import ReportChat from "../components/ReportChat";
 
 const API = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -305,6 +306,9 @@ export default function Report() {
           <strong>Web3 Security Scanner</strong> — This report is for informational purposes only. Always conduct a manual audit before deployment.
         </p>
       </footer>
+      
+      {/* Interactive Chat Panel */}
+      <ReportChat jobId={job.id} />
     </>
   );
 }
