@@ -44,6 +44,18 @@ class ScanJob(models.Model):
     proxy_address = models.CharField(max_length=42, blank=True)
     implementation_address = models.CharField(max_length=42, blank=True)
 
+    # Analysis mode
+    class AnalysisMode(models.TextChoices):
+        SOURCE   = "source",   "Solidity Source"
+        BYTECODE = "bytecode", "Bytecode (unverified)"
+        ABI_ONLY = "abi_only", "ABI Only"
+
+    analysis_mode = models.CharField(
+        max_length=20,
+        choices=AnalysisMode.choices,
+        default=AnalysisMode.SOURCE,
+    )
+
     # Raw tool outputs (stored as JSON for traceability)
     slither_output = models.JSONField(null=True, blank=True)
     mythril_output = models.JSONField(null=True, blank=True)

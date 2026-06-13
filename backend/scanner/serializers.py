@@ -26,7 +26,7 @@ class ScanJobSerializer(serializers.ModelSerializer):
             "status_message", "contract_name", "compiler_version",
             "risk_score", "risk_level", "is_honeypot",
             "is_proxy", "proxy_type", "proxy_address", "implementation_address",
-            "source_file_count",
+            "source_file_count", "analysis_mode",
             "ai_summary", "error_detail",
             "created_at", "updated_at", "vulnerabilities",
         ]

@@ -62,16 +62,30 @@ def fetch_contract_task(self, job_id: str):
 
     try:
         data = fetch_contract_source(job.address, job.network)
+        source_code = data.get("source_code", "")
+        analysis_mode = "source"
 
         # Detect proxy pattern
         from .services.proxy_resolver import detect_and_resolve_proxy
         proxy_info = detect_and_resolve_proxy(
-            job.address, job.network, data.get("etherscan_raw", {})
+            job.address, job.network, data.get("etherscan_raw", {})\
         )
+
+        # ── Bytecode fallback: no verified source ─────────────
+        if not source_code.strip():
+            _push_progress(job_id, 8, "No verified source — fetching bytecode...")
+            from .services.decompiler import fetch_bytecode, generate_pseudo_source
+            bytecode = fetch_bytecode(job.address, job.network)
+            if bytecode:
+                source_code = generate_pseudo_source(bytecode, job.address)
+                data["source_map"] = {"contract_bytecode.txt": source_code}
+                analysis_mode = "bytecode"
+            else:
+                analysis_mode = "abi_only"
 
         _update_job(
             job_id,
-            source_code=data.get("source_code", ""),
+            source_code=source_code,
             source_files=data.get("source_map"),
             abi=data.get("abi"),
             contract_name=data.get("contract_name", ""),
@@ -80,13 +94,16 @@ def fetch_contract_task(self, job_id: str):
             proxy_type=proxy_info["proxy_type"],
             proxy_address=job.address if proxy_info["is_proxy"] else "",
             implementation_address=proxy_info["implementation_address"],
+            analysis_mode=analysis_mode,
             status_message="Source code fetched successfully.",
             progress=15,
         )
 
-        label = data.get('contract_name', job.address)
+        label = data.get("contract_name", job.address)
         if proxy_info["is_proxy"]:
             label += f" [PROXY → {proxy_info['implementation_address'][:10]}...]"
+        if analysis_mode == "bytecode":
+            label += " ⚠️ [bytecode-only]"
         _push_progress(job_id, 15, f"Source fetched: {label}")
     except Exception as exc:
         _update_job(job_id, status="failed", error_detail=f"Fetch failed: {exc}")
