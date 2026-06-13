@@ -24,6 +24,10 @@ def run_slither(source_code: str, compiler_version: str, job_id: str) -> dict:
     with open(sol_file, "w", encoding="utf-8") as f:
         f.write(source_code)
 
+    import re
+    if not re.fullmatch(r"\d+\.\d+\.\d+", compiler_version):
+        raise ValueError(f"Invalid compiler version: {compiler_version!r}")
+
     # Set correct solc version for this contract
     try:
         subprocess.run(
