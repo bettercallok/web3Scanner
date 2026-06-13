@@ -137,6 +137,20 @@ services:
     depends_on:
       - backend
 
+  # ─── On-Chain Monitor ─────────────────────────────────────────
+  onchain-monitor:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    command: python manage.py run_onchain_monitor
+
   # ─── Initial Data Ingestion ───────────────────────────────────
   ingestion:
     build:
