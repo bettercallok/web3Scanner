@@ -82,6 +82,7 @@ class WatchedContract(models.Model):
     last_scanned = models.DateTimeField(null=True, blank=True)
     last_bytecode_hash = models.CharField(max_length=66, blank=True)  # detect upgrades
     alert_on_new_vuln = models.BooleanField(default=True)
+    rescan_frequency_days = models.IntegerField(default=0, help_text="0 means disabled. Otherwise, rescan every X days.")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

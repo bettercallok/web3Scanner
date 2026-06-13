@@ -416,3 +416,30 @@ def check_watchlist_task():
                 watched.save()
         except Exception as exc:
             logger.error(f"Watchlist check failed for {watched.address}: {exc}")
+
+
+@shared_task(queue="default")
+def scheduled_rescan_task():
+    """Daily task to trigger rescans based on user configuration."""
+    from .models import WatchedContract, ScanJob
+    from django.utils import timezone
+    from datetime import timedelta
+
+    watched_contracts = WatchedContract.objects.filter(rescan_frequency_days__gt=0)
+    for watched in watched_contracts:
+        try:
+            # Check if we need to rescan
+            if not watched.last_scanned or timezone.now() >= watched.last_scanned + timedelta(days=watched.rescan_frequency_days):
+                logger.info(f"Scheduled Rescan triggered for {watched.address}.")
+                
+                job = ScanJob.objects.create(
+                    address=watched.address.lower(),
+                    network=watched.network,
+                    user=watched.user,
+                )
+                run_full_scan.delay(str(job.id))
+                
+                watched.last_scanned = timezone.now()
+                watched.save()
+        except Exception as exc:
+            logger.error(f"Scheduled rescan failed for {watched.address}: {exc}")
