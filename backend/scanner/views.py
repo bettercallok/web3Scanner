@@ -39,4 +39,41 @@ class ScanDetailView(APIView):
         return Response(ser.data)
 
 
+class DiffView(APIView):
+    """
+    POST /api/diff/ — Compare two completed scan jobs.
 
+    Body: { "job_a": "<uuid>", "job_b": "<uuid>" }
+    Returns: new vulnerabilities, fixed vulnerabilities, unchanged, risk delta.
+    """
+
+    def post(self, request):
+        job_a_id = request.data.get("job_a")
+        job_b_id = request.data.get("job_b")
+
+        if not job_a_id or not job_b_id:
+            return Response(
+                {"detail": "Both job_a and job_b are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if job_a_id == job_b_id:
+            return Response(
+                {"detail": "job_a and job_b must be different scans."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        job_a = get_object_or_404(ScanJob, id=job_a_id)
+        job_b = get_object_or_404(ScanJob, id=job_b_id)
+
+        # Both must be complete
+        for label, job in (("job_a", job_a), ("job_b", job_b)):
+            if job.status != ScanJob.Status.COMPLETE:
+                return Response(
+                    {"detail": f"{label} scan is not yet complete (status: {job.status})."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        from .services.differ import diff_scan_jobs
+        result = diff_scan_jobs(job_a, job_b)
+        return Response(result, status=status.HTTP_200_OK)
