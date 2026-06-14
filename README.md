@@ -1,31 +1,43 @@
 # 🛡️ Web3 Security Scanner
 
-An **AI-powered, open-source** smart contract security scanner. Combines static analysis, symbolic execution, a local LLM, and honeypot simulation into one automated pipeline.
+An **AI-powered, full-stack, open-source** smart contract security scanner. Combines deep static analysis, symbolic execution, a local LLM for semantic understanding, and dynamic honeypot simulation into one automated, interactive pipeline. 
+
+## Features
+
+- **Automated Pipeline**: Instantly fetch source code from Etherscan and run a battery of security tests.
+- **Deep Code Analysis**: Uses Slither (static analysis) and Mythril (symbolic execution) for robust vulnerability detection.
+- **AI Semantic Review**: Employs a local LLM (Ollama + CodeLlama) to filter out false positives and explain complex logic flaws in plain English.
+- **Dynamic Risk Scoring**: Proprietary algorithm weights severity, confidence, and SWC classifications to give a final score out of 100.
+- **Portfolio Watchlist**: Track your critical contracts. Automatically records history and supports instant 1-click rescans via an expanding inline UI.
+- **Visual Call Graphs**: Interactive visualizations mapping out the contract's call graph and highlighting vulnerable execution paths.
+- **Interactive Report Chat**: Chat directly with the AI about your scan results right inside the dashboard to understand risks and remediations.
+- **Bytecode Diff Viewer**: Easily track upgrades or changes to contract byte-code over time.
+- **Exportable PDF Reports**: Automatically generates stylized, professional PDF security audits for clients or stakeholders.
 
 ## Architecture
 
-```
-[React Frontend] → [Django REST API] → [Celery Task Queue] → [Redis]
-                                              ↓
-                        ┌─────────────────────────────────┐
-                        │         Worker Pipeline          │
-                        │  1. Etherscan (source fetch)     │
-                        │  2. Slither (static analysis)    │
-                        │  3. Mythril (symbolic exec)      │
-                        │  4. Tenderly (honeypot sim)      │
-                        │  5. Ollama CodeLlama (AI RAG)    │
-                        │  6. Risk Scorer (weighted math)  │
-                        │  7. WeasyPrint (PDF report)      │
-                        └─────────────────────────────────┘
-                              ↓
-                        ChromaDB (vector store)
+```text
+[React + Vite Frontend] ↔ [Django REST API] → [Celery Task Queue] → [Redis]
+                                                   ↓
+                            ┌─────────────────────────────────┐
+                            │         Worker Pipeline          │
+                            │  1. Etherscan (source fetch)     │
+                            │  2. Slither (static analysis)    │
+                            │  3. Mythril (symbolic exec)      │
+                            │  4. Tenderly (honeypot sim)      │
+                            │  5. Ollama CodeLlama (AI RAG)    │
+                            │  6. Risk Scorer (weighted math)  │
+                            │  7. WeasyPrint (PDF report)      │
+                            └─────────────────────────────────┘
+                                  ↓
+                            ChromaDB (vector store)
 ```
 
 ## Stack
 
 | Component | Technology |
 |---|---|
-| Backend API | Django 4.2 + DRF + Django Channels |
+| Backend API | Django 4.2 + Django REST Framework |
 | Task Queue | Celery 5 + Redis |
 | Static Analysis | Slither |
 | Symbolic Exec | Mythril |
@@ -33,7 +45,7 @@ An **AI-powered, open-source** smart contract security scanner. Combines static 
 | Vector DB | ChromaDB |
 | Honeypot Sim | Tenderly API (optional) |
 | PDF Reports | WeasyPrint |
-| Frontend | React + Vite |
+| Frontend | React + Vite + Typescript |
 
 ## Quick Start
 
@@ -64,7 +76,7 @@ docker-compose exec backend python ai_engine/ingest_dataset.py
 
 | Service | URL |
 |---|---|
-| Frontend | http://localhost:3000 |
+| Frontend Dashboard | http://localhost:3000 |
 | Django API | http://localhost:8000/api/ |
 | Django Admin | http://localhost:8000/admin/ |
 
@@ -87,41 +99,35 @@ npm install
 npm run dev
 ```
 
-## API Endpoints
+## Core API Endpoints
 
 | Method | URL | Description |
 |---|---|---|
 | `POST` | `/api/scans/create/` | Submit contract for scan |
 | `GET` | `/api/scans/{id}/` | Poll scan status + results |
-| `GET` | `/api/scans/` | List recent scans |
+| `GET` | `/api/scans/` | List all recent scans |
+| `GET` | `/api/watchlist/` | Manage Portfolio Watchlist |
+| `GET` | `/api/scans/{id}/chat/` | Chat with AI about report |
+| `GET` | `/api/scans/{id}/graph/` | Retrieve call graph structure |
 | `GET` | `/api/reports/{id}/` | Full JSON report |
-| `GET` | `/api/reports/{id}/pdf/` | Download PDF report |
-| `WS` | `ws://host/ws/scan/{id}/` | Real-time progress feed |
+| `GET` | `/api/reports/{id}/pdf/` | Download generated PDF report |
 
-### Example
+### Example Request
 
 ```bash
 # Start a scan
 curl -X POST http://localhost:8000/api/scans/create/ \
   -H "Content-Type: application/json" \
+  -H "Authorization: Token <YOUR_TOKEN>" \
   -d '{"address": "0xdAC17F958D2ee523a2206206994597C13D831ec7", "network": "mainnet"}'
-
-# → {"id": "abc-123-...", "status": "pending"}
-
-# Poll progress
-curl http://localhost:8000/api/scans/abc-123.../
-
-# Download PDF
-curl -O http://localhost:8000/api/reports/abc-123.../pdf/
 ```
 
-## Security Notes
+## Security & Privacy Notes
 
 - All analysis runs in **isolated Docker containers**
-- Ollama LLM runs **locally** — no data sent to external APIs
+- Ollama LLM runs **locally** — no proprietary code is sent to external APIs (OpenAI, Anthropic, etc).
 - Rate limiting: **30 scans/hour** per IP (configurable in `settings.py`)
-- Tenderly simulation is **optional** — falls back to ABI heuristics if not configured
-- Set `DJANGO_DEBUG=False` and a strong `DJANGO_SECRET_KEY` for production
+- Set `DJANGO_DEBUG=False` and configure a strong `DJANGO_SECRET_KEY` for production deployments.
 
 ## Environment Variables
 
