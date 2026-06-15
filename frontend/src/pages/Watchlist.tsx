@@ -114,7 +114,7 @@ export default function Watchlist() {
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Network</label>
-            <select className="form-input" style={{ width: "100%", height: 44 }} value={newNetwork} onChange={e => setNewNetwork(e.target.value)}>
+            <select className="form-select" style={{ width: "100%", height: 48, padding: "12px 16px", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }} value={newNetwork} onChange={e => setNewNetwork(e.target.value)}>
               <option value="mainnet">Ethereum</option>
               <option value="polygon">Polygon</option>
               <option value="bsc">BSC</option>
