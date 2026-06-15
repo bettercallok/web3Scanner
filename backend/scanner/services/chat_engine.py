@@ -39,14 +39,31 @@ def chat_with_report(job, user_message: str) -> str:
             timeout=120,
         )
 
-        # Build context from job
-        findings = []
+        # Build context from job - include confirmed vulns AND false positives
+        confirmed = []
         for v in job.vulnerabilities.filter(is_false_positive=False):
-            findings.append(f"- [{v.severity.upper()}] {v.title}: {v.description}")
-        findings_summary = "\n".join(findings) if findings else "No vulnerabilities found."
+            confirmed.append(f"- [{v.severity.upper()}] {v.title}: {v.description}")
+
+        false_positives = []
+        for v in job.vulnerabilities.filter(is_false_positive=True):
+            false_positives.append(f"- {v.title}: {v.description} (reason: {v.tool} flagged but AI determined this is benign due to contract design)")
+
+        findings_summary = ""
+        if confirmed:
+            findings_summary += "Confirmed Vulnerabilities:\n" + "\n".join(confirmed)
+        else:
+            findings_summary += "Confirmed Vulnerabilities: None.\n"
+
+        if false_positives:
+            findings_summary += "\n\nFalse Positives (tools flagged but AI dismissed):\n" + "\n".join(false_positives)
+        else:
+            findings_summary += "\n\nFalse Positives: None."
+
+        if job.ai_summary:
+            findings_summary += f"\n\nAI Audit Summary:\n{job.ai_summary}"
 
         sys_prompt = _CHAT_SYSTEM_PROMPT.format(
-            source_code=job.source_code[:4000],
+            source_code=job.source_code[:4000] if job.source_code else "Source code not available.",
             findings_summary=findings_summary,
         )
 
