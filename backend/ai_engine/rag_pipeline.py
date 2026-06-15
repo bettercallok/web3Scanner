@@ -205,19 +205,32 @@ def _summarize_findings(findings: dict | None, tool: str) -> str:
 
 def _parse_llm_response(response: str) -> dict:
     import json, re
-    # Extract JSON from the response (model may add commentary around it)
-    match = re.search(r"\{.*\}", response, re.DOTALL)
-    if not match:
-        return {
-            "summary": response[:500],
-            "vulnerabilities": [],
-            "false_positives": [],
-        }
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return {
-            "summary": response[:500],
-            "vulnerabilities": [],
-            "false_positives": [],
-        }
+    
+    clean_resp = response.strip()
+    if clean_resp.startswith("```json"):
+        clean_resp = clean_resp[7:]
+    elif clean_resp.startswith("```"):
+        clean_resp = clean_resp[3:]
+    if clean_resp.endswith("```"):
+        clean_resp = clean_resp[:-3]
+    clean_resp = clean_resp.strip()
+
+    # Try to extract the first { ... } block
+    match = re.search(r"\{.*\}", clean_resp, re.DOTALL)
+    
+    # Try to parse entire JSON
+    if match:
+        try:
+            return json.loads(match.group(0))
+        except json.JSONDecodeError:
+            pass
+
+    # Fallback: if json parsing failed (e.g. truncated output), try to extract just the summary
+    summary_match = re.search(r'"summary"\s*:\s*"([^"]+)"', clean_resp)
+    summary_text = summary_match.group(1) if summary_match else clean_resp[:500]
+    
+    return {
+        "summary": summary_text.replace("\\n", "\n").strip(),
+        "vulnerabilities": [],
+        "false_positives": [],
+    }

@@ -145,7 +145,9 @@ export default function Report() {
               <RiskGauge score={job.risk_score} level={job.risk_level} />
               <div className="ai-summary">
                 <h3>// AI ANALYSIS SUMMARY</h3>
-                <p>{job.ai_summary || "AI analysis was not available for this scan."}</p>
+                <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: "1.6" }}>
+                  {job.ai_summary || "AI analysis was not available for this scan."}
+                </p>
               </div>
             </div>
           </div>
