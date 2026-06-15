@@ -162,7 +162,7 @@ export default function Home() {
                     disabled={loading}
                     style={{ whiteSpace: "nowrap" }}
                   >
-                    {loading ? "STARTING..." : "🚀 SCAN NOW"}
+                    {loading ? "STARTING..." : "SCAN NOW"}
                   </button>
                 </div>
                 {error && <div className="form-error">⚠ {error}</div>}
