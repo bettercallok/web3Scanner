@@ -27,6 +27,22 @@ export default function Register() {
       login(res.data.access, res.data.refresh);
       navigate("/dashboard");
     } catch (err: any) {
+      if (err.response && err.response.data) {
+        const data = err.response.data;
+        const messages: string[] = [];
+        for (const key in data) {
+          const fieldName = key.charAt(0).toUpperCase() + key.slice(1);
+          if (Array.isArray(data[key])) {
+            messages.push(`${fieldName}: ${data[key].join(' ')}`);
+          } else if (typeof data[key] === 'string') {
+            messages.push(data[key]);
+          }
+        }
+        if (messages.length > 0) {
+          setError(messages.join(' | '));
+          return;
+        }
+      }
       setError("Failed to register. Username might be taken.");
     }
   };
