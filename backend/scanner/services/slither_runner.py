@@ -8,6 +8,7 @@ import json
 import uuid
 import logging
 import subprocess
+import glob
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ def run_slither(
             "--json", "-",
             "--no-fail-pedantic",
             "--exclude-dependencies",
+            "--print", "call-graph",
         ],
         capture_output=True,
         text=True,
@@ -99,12 +101,61 @@ def run_slither(
             "results": {"detectors": []},
         }
 
+    # ── Parse Call Graph (.dot) ──────────────────────────────────
+    call_graph = {"nodes": [], "links": []}
+    dot_files = glob.glob(os.path.join(work_dir, "*.dot"))
+    
+    node_pattern = re.compile(r'"([^"]+)"\s*\[label="([^"]+)"\]')
+    edge_pattern = re.compile(r'"([^"]+)"\s*->\s*"([^"]+)"')
+    
+    for dot_file in dot_files:
+        try:
+            with open(dot_file, "r") as f:
+                content = f.read()
+            for match in node_pattern.finditer(content):
+                call_graph["nodes"].append({
+                    "id": match.group(1),
+                    "label": match.group(2),
+                    "group": 2
+                })
+            for match in edge_pattern.finditer(content):
+                call_graph["links"].append({
+                    "source": match.group(1),
+                    "target": match.group(2)
+                })
+        except Exception as e:
+            logger.error(f"Failed to parse dot file {dot_file}: {e}")
+
+    # Deduplicate nodes just in case
+    unique_nodes = {n["id"]: n for n in call_graph["nodes"]}
+    
+    # Ensure all links point to valid nodes
+    valid_links = []
+    for link in call_graph["links"]:
+        if link["source"] not in unique_nodes:
+            unique_nodes[link["source"]] = {"id": link["source"], "label": link["source"], "group": 3}
+        if link["target"] not in unique_nodes:
+            unique_nodes[link["target"]] = {"id": link["target"], "label": link["target"], "group": 3}
+        valid_links.append(link)
+
+    call_graph["nodes"] = list(unique_nodes.values())
+    call_graph["links"] = valid_links
+
+    # Prevent massive graphs from crashing the browser (limit to 300 nodes)
+    if len(call_graph["nodes"]) > 300:
+        call_graph["nodes"] = call_graph["nodes"][:300]
+        allowed_ids = {n["id"] for n in call_graph["nodes"]}
+        call_graph["links"] = [l for l in call_graph["links"] if l["source"] in allowed_ids and l["target"] in allowed_ids]
+
     try:
-        return json.loads(stdout)
+        data = json.loads(stdout)
+        data["call_graph_data"] = call_graph
+        return data
     except json.JSONDecodeError:
         return {
             "success": False,
             "error":   "JSON parse error",
             "raw":     stdout[:500],
             "results": {"detectors": []},
+            "call_graph_data": call_graph
         }

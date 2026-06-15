@@ -127,7 +127,7 @@ def run_slither_task(self, job_id: str):
     try:
         raw = run_slither(job.source_code, job.compiler_version, job_id, source_map=job.source_files)
         parsed = parse_slither_output(raw)
-        _update_job(job_id, slither_output=raw, progress=40, status_message="Slither analysis complete.")
+        _update_job(job_id, slither_output=raw, call_graph_data=raw.get("call_graph_data"), progress=40, status_message="Slither analysis complete.")
 
         vulns = []
         for v in parsed:

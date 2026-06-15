@@ -41,6 +41,7 @@ export default function VulnGraph({ jobId }: { jobId: string }) {
   }, [loading]);
 
   if (loading) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>Loading graph...</div>;
+  if (!data || !data.nodes || data.nodes.length === 0) return <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>No graph data available for this contract.</div>;
 
   return (
     <div className="vuln-graph-container" ref={containerRef} style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "#0a0a0c" }}>

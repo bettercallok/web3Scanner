@@ -63,10 +63,11 @@ class ScanJob(models.Model):
         default=AnalysisMode.SOURCE,
     )
 
-    # Raw tool outputs (stored as JSON for traceability)
+    # Analysis Outputs
     slither_output = models.JSONField(null=True, blank=True)
     mythril_output = models.JSONField(null=True, blank=True)
     tenderly_output = models.JSONField(null=True, blank=True)
+    call_graph_data = models.JSONField(null=True, blank=True)
     ai_summary = models.TextField(blank=True)
 
     # Phase 6: Public Reports

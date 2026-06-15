@@ -137,31 +137,11 @@ class CallGraphView(APIView):
 
     def get(self, request, job_id):
         job = get_object_or_404(ScanJob, id=job_id)
-        # In a real implementation, we would parse Slither's call-graph output.
-        # For this Phase 6 demo, we'll return a mock graph structure of the contract.
-        
-        has_vulns = job.vulnerabilities.filter(is_false_positive=False).exists()
-        
-        nodes = [
-            {"id": "Contract", "group": 1},
-            {"id": "deposit()", "group": 2},
-            {"id": "withdraw()", "group": 2, "vulnerable": has_vulns},
-            {"id": "transfer()", "group": 2},
-            {"id": "balanceOf", "group": 3},
-            {"id": "owner", "group": 3},
-        ]
-        
-        edges = [
-            {"source": "Contract", "target": "deposit()"},
-            {"source": "Contract", "target": "withdraw()"},
-            {"source": "Contract", "target": "transfer()"},
-            {"source": "deposit()", "target": "balanceOf"},
-            {"source": "withdraw()", "target": "balanceOf"},
-            {"source": "withdraw()", "target": "owner"},
-            {"source": "transfer()", "target": "balanceOf"},
-        ]
-        
-        return Response({"nodes": nodes, "links": edges}, status=status.HTTP_200_OK)
+        if job.call_graph_data and job.call_graph_data.get("nodes"):
+            return Response(job.call_graph_data, status=status.HTTP_200_OK)
+            
+        # Fallback if no graph data was generated
+        return Response({"nodes": [], "links": []}, status=status.HTTP_200_OK)
 
 class TogglePublicView(APIView):
     permission_classes = [IsAuthenticated]
