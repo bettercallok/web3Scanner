@@ -68,7 +68,7 @@ export default function Login() {
                 <label style={{ display: "block", marginBottom: 8, fontSize: 14, color: "var(--text-2)" }}>Username</label>
                 <input
                   type="text"
-                  className="search-input"
+                  className="form-input"
                   style={{ width: "100%" }}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -79,7 +79,7 @@ export default function Login() {
                 <label style={{ display: "block", marginBottom: 8, fontSize: 14, color: "var(--text-2)" }}>Password</label>
                 <input
                   type="password"
-                  className="search-input"
+                  className="form-input"
                   style={{ width: "100%" }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

@@ -109,12 +109,12 @@ export default function Watchlist() {
         <form onSubmit={handleAdd} style={{ display: "flex", gap: 16, alignItems: "flex-end", marginBottom: addError ? 12 : 0 }}>
           <div style={{ flex: 2 }}>
             <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Address</label>
-            <input type="text" className="search-input" style={{ width: "100%" }} required
+            <input type="text" className="form-input" style={{ width: "100%" }} required
               value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="0x..." />
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Network</label>
-            <select className="search-input" style={{ width: "100%", height: 44 }} value={newNetwork} onChange={e => setNewNetwork(e.target.value)}>
+            <select className="form-input" style={{ width: "100%", height: 44 }} value={newNetwork} onChange={e => setNewNetwork(e.target.value)}>
               <option value="mainnet">Ethereum</option>
               <option value="polygon">Polygon</option>
               <option value="bsc">BSC</option>
@@ -122,7 +122,7 @@ export default function Watchlist() {
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Label (Optional)</label>
-            <input type="text" className="search-input" style={{ width: "100%" }} 
+            <input type="text" className="form-input" style={{ width: "100%" }} 
               value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Yield Vault" />
           </div>
           <button type="submit" className="btn btn-primary" style={{ height: 44 }}>Add</button>
