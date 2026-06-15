@@ -53,10 +53,12 @@ many modern rug-pulls use dynamic taxes or hidden blacklists that only trigger d
 the raw JSON output from slither and mythril is dense and difficult for junior devs to understand. the system queries a local chromaDB instance (seeded with historical SWC database entries) to find similar past vulnerabilities. it injects this context, along with the raw AST data, into a local LLM running via ollama. the LLM reviews the findings, strips out false positives, and writes a human-readable explanation and remediation plan.
 
 ### phase 7: proprietary risk scoring
-all findings are aggregated. the system applies a weighted mathematical algorithm to calculate a risk score from 0 to 100.
-* critical vulnerabilities carry a 50x multiplier.
-* high vulnerabilities carry a 20x multiplier.
-* honeypot detection auto-sets the score to 100 (maximum risk).
+all findings are aggregated to compute a final risk score using the formula `R = Σ(Wᵢ × Sᵢ × Pᵢ)`.
+* **Wᵢ (base severity weight):** critical = 30.0, high = 15.0, medium = 6.0, low = 2.0, info = 0.3.
+* **Sᵢ (severity context):** calculated as `swc_multiplier × confidence_multiplier`. severe classes like SWC-106 (unprotected self-destruct) have a 2.0x multiplier, while SWC-107 (reentrancy) has a 1.8x multiplier.
+* **Pᵢ (tool probability/confidence):** mythril carries a 0.9 weight due to symbolic certainty, AI carries 0.85, and slither 0.75.
+
+if tenderly flags the token as a honeypot, an immediate +40.0 penalty is added to the total. the final score is capped at 100.0, and mapped to a threshold (80+ is critical, 60+ is high).
 
 ### phase 8: artifact generation
 the final JSON report is saved to postgresql. a websocket event fires to tell the frontend the scan is complete. in the background, weasyprint takes an HTML template and compiles a professional, branded PDF audit report that users can download and share with clients.
