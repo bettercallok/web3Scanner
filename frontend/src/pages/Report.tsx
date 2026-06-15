@@ -66,6 +66,8 @@ export default function Report() {
     return acc;
   }, {});
 
+  const gasIssues = job.gas_issues || [];
+
   return (
     <>
       <nav className="navbar">
@@ -187,10 +189,45 @@ export default function Report() {
                     {f !== "all" && ` (${counts[f as Severity]})`}
                   </button>
                 ))}
+                {gasIssues.length > 0 && (
+                  <button
+                    className={`filter-btn ${filter === "gas" ? "active" : ""}`}
+                    onClick={() => setFilter("gas")}
+                  >
+                    Gas Optimization ({gasIssues.length})
+                  </button>
+                )}
               </div>
 
-          {/* Vulnerabilities */}
-          {filtered.length === 0 ? (
+          {/* Findings */}
+          {filter === "gas" ? (
+             gasIssues.map((g) => (
+               <div key={g.id} className="vuln-card">
+                 <div className="vuln-card-header">
+                   <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                     <span className="vuln-severity" style={{ background: "rgba(0,230,168,0.1)", color: "#00e6a8" }}>GAS</span>
+                     <h3 className="vuln-title" style={{ margin: 0 }}>{g.title}</h3>
+                   </div>
+                   {g.estimated_gas_saving ? (
+                     <span style={{ color: "#00e6a8", fontFamily: "'JetBrains Mono', monospace", fontSize: 13 }}>
+                       ~{g.estimated_gas_saving} gas saved
+                     </span>
+                   ) : null}
+                 </div>
+                 {g.description && <p style={{ fontSize: 14, color: "var(--text-2)", marginBottom: 16 }}>{g.description}</p>}
+                 {g.file_path && g.line_numbers && (
+                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: "var(--text-3)", marginBottom: 8 }}>
+                      Location: {g.file_path}:{g.line_numbers}
+                    </div>
+                 )}
+                 {g.code_snippet && (
+                    <pre style={{ background: "rgba(0,0,0,0.3)", padding: 12, borderRadius: 6, overflowX: "auto", border: "1px solid var(--border)", fontSize: 13, fontFamily: "'JetBrains Mono', monospace", color: "var(--text-2)" }}>
+                      {g.code_snippet}
+                    </pre>
+                 )}
+               </div>
+             ))
+          ) : filtered.length === 0 ? (
             <div className="card" style={{ textAlign: "center", padding: "56px" }}>
               <div style={{ fontSize: "44px", marginBottom: "16px" }}>
                 {filter === "all" ? "✔" : "🔍"}
