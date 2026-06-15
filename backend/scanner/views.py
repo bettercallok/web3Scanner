@@ -1,3 +1,4 @@
+import logging
 from rest_framework import status, generics
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -7,6 +8,8 @@ from django.shortcuts import get_object_or_404
 from .models import ScanJob
 from .serializers import ScanCreateSerializer, ScanJobSerializer
 from .tasks import run_full_scan
+
+logger = logging.getLogger(__name__)
 
 class ScanListView(generics.ListAPIView):
     """GET /api/scans/ — List user's scans."""
@@ -18,17 +21,17 @@ class ScanListView(generics.ListAPIView):
 
 class ScanCreateView(APIView):
     """POST /api/scans/ — Submit a contract for scanning."""
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         ser = ScanCreateSerializer(data=request.data)
         if not ser.is_valid():
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        user = request.user if request.user.is_authenticated else None
         job = ScanJob.objects.create(
             address=ser.validated_data["address"].lower(),
             network=ser.validated_data["network"],
-            user=user,
+            user=request.user,
         )
 
         # Enqueue the full pipeline
@@ -42,9 +45,13 @@ class ScanCreateView(APIView):
 
 class ScanDetailView(APIView):
     """GET /api/scans/{id}/ — Poll scan status and results."""
+    permission_classes = [AllowAny]
 
     def get(self, request, job_id):
         job = get_object_or_404(ScanJob, id=job_id)
+        if not job.is_public and job.user is not None and job.user != request.user:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         ser = ScanJobSerializer(job)
         return Response(ser.data)
 
@@ -76,8 +83,13 @@ class DiffView(APIView):
         job_a = get_object_or_404(ScanJob, id=job_a_id)
         job_b = get_object_or_404(ScanJob, id=job_b_id)
 
-        # Both must be complete
+        # Both must be complete and user must have access
         for label, job in (("job_a", job_a), ("job_b", job_b)):
+            if not job.is_public and job.user is not None and job.user != request.user:
+                return Response(
+                    {"detail": f"Permission denied for {label}."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             if job.status != ScanJob.Status.COMPLETE:
                 return Response(
                     {"detail": f"{label} scan is not yet complete (status: {job.status})."},
@@ -100,6 +112,9 @@ class ReportChatView(APIView):
             return Response({"detail": "Message is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         job = get_object_or_404(ScanJob, id=job_id)
+        if not job.is_public and job.user is not None and job.user != request.user:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+            
         if job.status != ScanJob.Status.COMPLETE:
             return Response({"detail": "Scan must be complete to chat."}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -137,11 +152,31 @@ class CallGraphView(APIView):
 
     def get(self, request, job_id):
         job = get_object_or_404(ScanJob, id=job_id)
+        if not job.is_public and job.user is not None and job.user != request.user:
+            return Response({"detail": "Permission denied."}, status=status.HTTP_403_FORBIDDEN)
+
         if job.call_graph_data and job.call_graph_data.get("nodes"):
             return Response(job.call_graph_data, status=status.HTTP_200_OK)
-            
-        # Fallback if no graph data was generated
-        return Response({"nodes": [], "links": []}, status=status.HTTP_200_OK)
+
+        # No cached graph — generate it on-demand from stored source code
+        if not job.source_code:
+            return Response({"nodes": [], "links": [], "error": "No source code available."}, status=status.HTTP_200_OK)
+
+        try:
+            from .services.slither_runner import extract_call_graph
+            graph = extract_call_graph(
+                source_code=job.source_code,
+                compiler_version=job.compiler_version or "0.8.20",
+                job_id=str(job.id),
+                source_map=job.source_files,
+            )
+            # Cache the result so next load is instant
+            job.call_graph_data = graph
+            job.save(update_fields=["call_graph_data"])
+            return Response(graph, status=status.HTTP_200_OK)
+        except Exception as e:
+            logger.error(f"On-demand graph extraction failed for {job_id}: {e}")
+            return Response({"nodes": [], "links": [], "error": "Graph generation failed. Please try again later."}, status=status.HTTP_200_OK)
 
 class TogglePublicView(APIView):
     permission_classes = [IsAuthenticated]
