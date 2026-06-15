@@ -37,7 +37,7 @@ def send_alert(user, subject, message, risk_level=None):
             logger.error(f"Failed to send email to {user.email}: {e}")
 
     # 2. Slack
-    if settings_obj.slack_webhook_url:
+    if settings_obj.slack_webhook_url and settings_obj.slack_webhook_url.startswith("https://hooks.slack.com/services/"):
         try:
             requests.post(settings_obj.slack_webhook_url, json={"text": f"*{subject}*\n{message}"}, timeout=5)
         except Exception as e:
