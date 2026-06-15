@@ -1,140 +1,105 @@
-# 🛡️ Web3 Security Scanner
+# web3 security scanner: full-stack smart contract observability
 
-An **AI-powered, full-stack, open-source** smart contract security scanner. Combines deep static analysis, symbolic execution, a local LLM for semantic understanding, and dynamic honeypot simulation into one automated, interactive pipeline. 
+[![CI](https://github.com/omkhatri/web3scanner/actions/workflows/test.yml/badge.svg)](https://github.com/omkhatri/web3scanner)
+web3 security scanner is a production-grade smart contract vulnerability detection and observability platform. it allows engineers and auditors to register smart contracts across multiple networks (mainnet, polygon, bsc), explore contract logic under controlled conditions using static and symbolic analysis, generate call graphs, simulate honeypot transactions via tenderly, and continuously monitor for risks using a local LLM-powered RAG pipeline for semantic code understanding.
 
-## Features
+---
 
-- **Automated Pipeline**: Instantly fetch source code from Etherscan and run a battery of security tests.
-- **Deep Code Analysis**: Uses Slither (static analysis) and Mythril (symbolic execution) for robust vulnerability detection.
-- **AI Semantic Review**: Employs a local LLM (Ollama + CodeLlama) to filter out false positives and explain complex logic flaws in plain English.
-- **Dynamic Risk Scoring**: Proprietary algorithm weights severity, confidence, and SWC classifications to give a final score out of 100.
-- **Portfolio Watchlist**: Track your critical contracts. Automatically records history and supports instant 1-click rescans via an expanding inline UI.
-- **Visual Call Graphs**: Interactive visualizations mapping out the contract's call graph and highlighting vulnerable execution paths.
-- **Interactive Report Chat**: Chat directly with the AI about your scan results right inside the dashboard to understand risks and remediations.
-- **Bytecode Diff Viewer**: Easily track upgrades or changes to contract byte-code over time.
-- **Exportable PDF Reports**: Automatically generates stylized, professional PDF security audits for clients or stakeholders.
+## architecture & system flow
 
-## Architecture
-
-```text
-[React + Vite Frontend] ↔ [Django REST API] → [Celery Task Queue] → [Redis]
-                                                   ↓
-                            ┌─────────────────────────────────┐
-                            │         Worker Pipeline          │
-                            │  1. Etherscan (source fetch)     │
-                            │  2. Slither (static analysis)    │
-                            │  3. Mythril (symbolic exec)      │
-                            │  4. Tenderly (honeypot sim)      │
-                            │  5. Ollama CodeLlama (AI RAG)    │
-                            │  6. Risk Scorer (weighted math)  │
-                            │  7. WeasyPrint (PDF report)      │
-                            └─────────────────────────────────┘
-                                  ↓
-                            ChromaDB (vector store)
+```mermaid
+graph TD
+    A[contract submission] -->|detect network & fetch| B(etherscan API)
+    B -->|save source & queue| C[celery orchestration queue]
+    
+    C -->|fast AST analysis| D[slither engine]
+    C -->|deep symbolic exec| E[mythril engine]
+    C -->|fork & simulate| F[tenderly API]
+    
+    D -->|extract AST & vulns| G[RAG context builder]
+    E -->|extract logic flaws| G
+    
+    G -->|query knowledge base| H[(chromaDB vector store)]
+    H -->|inject SWC context| I[ollama local LLM]
+    
+    I -->|generate human-readable report| J[(postgresql DB)]
+    J -->|real-time websocket| K[react + vite frontend]
+    J -->|export| L[weasyprint PDF generator]
 ```
 
-## Stack
+---
 
-| Component | Technology |
-|---|---|
-| Backend API | Django 4.2 + Django REST Framework |
-| Task Queue | Celery 5 + Redis |
-| Static Analysis | Slither |
-| Symbolic Exec | Mythril |
-| LLM (local, free) | Ollama — CodeLlama 7B |
-| Vector DB | ChromaDB |
-| Honeypot Sim | Tenderly API (optional) |
-| PDF Reports | WeasyPrint |
-| Frontend | React + Vite + Typescript |
+## key capabilities & tradeoffs
 
-## Quick Start
+*   **unified analysis engines**: supports combining blazing-fast static analysis (slither) with deep mathematical symbolic execution (mythril).
+    *   *tradeoff*: mythril is extremely computationally heavy. to prevent queue blocking, we cap execution timeouts at 120 seconds per function and process it asynchronously alongside slither.
+*   **zero-leakage AI semantic review**: utilizes a completely local LLM (ollama with `qwen2.5-coder` or `codellama`) and a local vector database (chromaDB) to explain vulnerabilities.
+    *   *tradeoff*: local 7b-parameter models are less capable of complex zero-shot reasoning than GPT-4. to compensate, we inject highly structured RAG context containing verified SWC (smart contract weakness classification) examples. no code is ever sent to OpenAI or Anthropic.
+*   **dynamic honeypot simulation**: integrates with tenderly to fork the mainnet state and simulate buy/sell transactions to detect hidden dynamic taxes and honeypots.
+    *   *tradeoff*: relies on a centralized SaaS (tenderly API). if tenderly is unreachable, the system gracefully degrades to static ABI heuristic checks (e.g., ensuring a `transfer` or `sell` function exists).
+*   **interactive call graph visualization**: automatically parses slither AST data to generate a complete visual map of contract logic, highlighting vulnerable execution paths.
+*   **production readiness features**:
+    *   *async architecture*: django channels and celery ensure the django API thread is never blocked during 5-minute analysis runs.
+    *   *rate limiting*: built-in DRF throttling prevents DoS attacks by limiting authenticated users to 50 scans per hour.
+    *   *secure artifact handling*: all subprocesses are protected against path traversal, and sensitive error traces are sanitized.
 
-### 1. Configure Environment
+---
 
+## setup & installation
+
+### 1. prerequisites
+ensure you have docker and docker-compose installed.
+
+### 2. configure environment
+copy the example environment file and configure your API keys:
 ```bash
 cp .env.example .env
-# Edit .env — at minimum add your ETHERSCAN_API_KEY
+# you must add your ETHERSCAN_API_KEY
 ```
 
-### 2. Start All Services
-
+### 3. run the platform
+start all microservices (django, celery, redis, postgres, ollama, chromadb, frontend) via docker:
 ```bash
 docker-compose up --build -d
 ```
+> ⚠️ **first run**: ollama will automatically pull the LLM image (~4gb). this takes a few minutes.
 
-This starts: Django backend, Celery worker, Redis, ChromaDB, Ollama (pulls CodeLlama 7b), and the React frontend.
-
-> ⚠️ **First run**: Ollama will pull `codellama:7b` (~4 GB). This takes a few minutes. Wait for it to complete before scanning.
-
-### 3. Seed the RAG Knowledge Base
-
+### 4. seed the RAG knowledge base
+ingest the baseline security documents into the vector database:
 ```bash
-docker-compose exec backend python ai_engine/ingest_dataset.py
+docker-compose exec backend python manage.py ingest_knowledge --source all
+```
+the interactive react dashboard will now be available at `http://localhost:3000`.
+
+---
+
+## testing
+
+to run the complete suite of automated security and unit tests for the backend:
+```bash
+docker-compose exec backend pytest scanner/tests/ accounts/tests/ -v
 ```
 
-### 4. Open the App
+---
 
-| Service | URL |
-|---|---|
-| Frontend Dashboard | http://localhost:3000 |
-| Django API | http://localhost:8000/api/ |
-| Django Admin | http://localhost:8000/admin/ |
+## API endpoints reference
 
-### 5. Run Dev Without Docker
+### 1. scan registry & execution
+*   `POST /api/scans/create/` - submit a contract address and network for a full analysis pipeline run. (requires auth)
+*   `GET /api/scans/{id}/` - poll the real-time status and current results of a scan.
+*   `GET /api/scans/` - list all historical scans associated with the user.
 
-```bash
-# Backend
-cd backend
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver
+### 2. observability & reporting
+*   `GET /api/scans/{id}/graph/` - retrieve the interactive call graph structure for a specific contract.
+*   `POST /api/scans/{id}/chat/` - open an interactive chat session with the local LLM about the specific scan report.
+*   `GET /api/reports/{id}/` - retrieve the finalized, aggregated JSON security report.
+*   `GET /api/reports/{id}/pdf/` - dynamically generate and download a stylized PDF of the security audit.
 
-# Celery worker (separate terminal)
-celery -A config worker -l info -Q default,analysis,ai
+### 3. portfolio monitoring
+*   `GET /api/watchlist/` - retrieve the user's monitored portfolio.
+*   `POST /api/watchlist/` - add a new contract to the watchlist for rapid rescanning and tracking.
 
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
-```
-
-## Core API Endpoints
-
-| Method | URL | Description |
-|---|---|---|
-| `POST` | `/api/scans/create/` | Submit contract for scan |
-| `GET` | `/api/scans/{id}/` | Poll scan status + results |
-| `GET` | `/api/scans/` | List all recent scans |
-| `GET` | `/api/watchlist/` | Manage Portfolio Watchlist |
-| `GET` | `/api/scans/{id}/chat/` | Chat with AI about report |
-| `GET` | `/api/scans/{id}/graph/` | Retrieve call graph structure |
-| `GET` | `/api/reports/{id}/` | Full JSON report |
-| `GET` | `/api/reports/{id}/pdf/` | Download generated PDF report |
-
-### Example Request
-
-```bash
-# Start a scan
-curl -X POST http://localhost:8000/api/scans/create/ \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Token <YOUR_TOKEN>" \
-  -d '{"address": "0xdAC17F958D2ee523a2206206994597C13D831ec7", "network": "mainnet"}'
-```
-
-## Security & Privacy Notes
-
-- All analysis runs in **isolated Docker containers**
-- Ollama LLM runs **locally** — no proprietary code is sent to external APIs (OpenAI, Anthropic, etc).
-- Rate limiting: **30 scans/hour** per IP (configurable in `settings.py`)
-- Set `DJANGO_DEBUG=False` and configure a strong `DJANGO_SECRET_KEY` for production deployments.
-
-## Environment Variables
-
-See [`.env.example`](.env.example) for all options. Required:
-
-- `DJANGO_SECRET_KEY` — random secret string
-- `ETHERSCAN_API_KEY` — free at https://etherscan.io/myapikey
-
-Optional (for enhanced honeypot detection):
-- `TENDERLY_ACCESS_KEY`, `TENDERLY_PROJECT`, `TENDERLY_ACCOUNT`
+### 4. authentication
+*   `POST /api/accounts/register/` - register a new user account with strict password validation.
+*   `POST /api/accounts/login/` - obtain JWT access and refresh tokens.
+*   `POST /api/accounts/token/refresh/` - refresh an expired access token.
