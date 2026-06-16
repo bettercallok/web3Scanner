@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 ENV PIP_DEFAULT_TIMEOUT=600 \
     PIP_RETRIES=15 \
