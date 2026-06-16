@@ -6,12 +6,13 @@ ENV PIP_DEFAULT_TIMEOUT=600 \
     PIP_PROGRESS_BAR=off \
     PYTHONUNBUFFERED=1
 
-# System dependencies for Slither, Mythril, WeasyPrint, Redis, Supervisor
+# System dependencies for Slither, Mythril, WeasyPrint, Redis, Supervisor, Ollama
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
     curl \
     wget \
+    zstd \
     libssl-dev \
     libffi-dev \
     libpango-1.0-0 \
