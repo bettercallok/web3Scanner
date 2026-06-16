@@ -62,10 +62,11 @@ ENV HOME=/home/user
 ENV PATH=/home/user/.local/bin:$PATH
 
 # Pre-download Ollama models during build time
-RUN ollama serve & \
+RUN ollama serve & PID=$! && \
     sleep 5 && \
     ollama pull qwen2.5-coder:1.5b && \
-    ollama pull nomic-embed-text
+    ollama pull nomic-embed-text && \
+    kill $PID
 
 EXPOSE 7860
 
