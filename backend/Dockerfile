@@ -3,9 +3,10 @@ FROM python:3.11-slim
 
 ENV PIP_DEFAULT_TIMEOUT=600 \
     PIP_RETRIES=15 \
-    PIP_PROGRESS_BAR=off
+    PIP_PROGRESS_BAR=off \
+    PYTHONUNBUFFERED=1
 
-# System dependencies for Slither, Mythril, WeasyPrint
+# System dependencies for Slither, Mythril, WeasyPrint, Redis, Supervisor
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
@@ -20,7 +21,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgirepository1.0-dev \
     gir1.2-pango-1.0 \
     fonts-liberation \
+    redis-server \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama CLI/Server
+RUN curl -fsSL https://ollama.com/install.sh | sh
 
 # solc-select + pip wheel cache (survives failed builds; speeds retries)
 RUN --mount=type=cache,target=/root/.cache/pip \
@@ -44,4 +50,23 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 
 COPY . .
 
-EXPOSE 8000
+# Set up non-root user "user" with UID 1000 for Hugging Face Spaces compatibility
+RUN useradd -m -u 1000 user && \
+    mkdir -p /app/logs /app/chroma_data /home/user/.ollama && \
+    chmod +x /app/entrypoint.sh && \
+    chown -R user:user /app /home/user
+
+# Switch to the non-root user
+USER user
+ENV HOME=/home/user
+ENV PATH=/home/user/.local/bin:$PATH
+
+# Pre-download Ollama models during build time
+RUN ollama serve & \
+    sleep 5 && \
+    ollama pull qwen2.5-coder:1.5b && \
+    ollama pull nomic-embed-text
+
+EXPOSE 7860
+
+ENTRYPOINT ["/app/entrypoint.sh"]
