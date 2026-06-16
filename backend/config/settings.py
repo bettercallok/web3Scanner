@@ -156,6 +156,7 @@ SCAN_TMP_DIR = env("SCAN_TMP_DIR", default=str(BASE_DIR / "scan_tmp"))
 
 # ── Security Headers (production) ─────────────────────────────
 if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SECURE_HSTS_SECONDS = 31536000
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
