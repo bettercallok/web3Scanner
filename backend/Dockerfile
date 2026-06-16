@@ -63,10 +63,12 @@ ENV PATH=/home/user/.local/bin:$PATH
 
 # Pre-download Ollama models during build time
 RUN ollama serve & PID=$! && \
-    sleep 5 && \
+    echo "Waiting for Ollama to start..." && \
+    while ! curl -s http://127.0.0.1:11434/api/tags > /dev/null; do sleep 2; done && \
+    echo "Ollama started. Pulling models..." && \
     ollama pull qwen2.5-coder:1.5b && \
     ollama pull nomic-embed-text && \
-    kill $PID
+    kill $PID || true
 
 EXPOSE 7860
 
