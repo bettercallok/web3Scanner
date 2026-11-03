@@ -46,8 +46,12 @@ mythril takes the compiled EVM bytecode and mathematically explores all possible
 ### phase 4: gas optimization analysis
 a secondary slither pass is executed specifically looking for gas bloat. it detects costly loops, un-cached array lengths, division before multiplication (precision loss), and redundant boolean equality checks. each finding is mapped to an estimated "gas saved" metric.
 
-### phase 5: tenderly honeypot simulation
-many modern rug-pulls use dynamic taxes or hidden blacklists that only trigger during a sell order. the system connects to the tenderly API, forks the live mainnet state, and simulates a purchase followed immediately by a sell order. if the buy succeeds but the sell reverts, the token is flagged as a highly probable honeypot.
+### phase 5: honeypot detection
+many modern rug-pulls use dynamic taxes or hidden blacklists that only trigger during a sell order. two signals are combined:
+* **ABI red flags** — owner-controlled trading switches, blacklists/bot lists, adjustable sell taxes, max-tx/max-wallet limits.
+* **tenderly simulation** (when configured) — an ordinary holder sends a zero-value `transfer`. a revert is only treated as a honeypot when corroborated by at least one red flag.
+
+only ERC-20-style contracts (with `transfer` and `balanceOf`) are honeypot candidates; other contracts report `is_honeypot: null`.
 
 ### phase 6: RAG-powered AI review
 the raw JSON output from slither and mythril is dense and difficult for junior devs to understand. the system queries a local chromaDB instance (seeded with historical SWC database entries) to find similar past vulnerabilities. it injects this context, along with the raw AST data, into a local LLM running via ollama. the LLM reviews the findings, strips out false positives, and writes a human-readable explanation and remediation plan.
@@ -155,11 +159,18 @@ celery -A config worker -l info -Q default,analysis,ai
 
 ## testing
 
-the platform includes a massive suite of automated unit and integration tests.
-to run the complete suite of security and unit tests for the backend:
+backend tests mock every external tool (slither, mythril, etherscan, RPC, ollama), so they run anywhere:
 ```bash
-docker-compose exec backend pytest scanner/tests/ accounts/tests/ -v
+cd backend
+CACHE_BACKEND=locmem DJANGO_SECRET_KEY=test DJANGO_DEBUG=True python manage.py test
 ```
+frontend:
+```bash
+cd frontend
+npm run typecheck
+npm run build
+```
+both run in GitHub Actions on every pull request (`.github/workflows/ci.yml`).
 
 ---
 
@@ -173,8 +184,23 @@ the platform exposes a rich REST API that can be consumed by external CI/CD pipe
     * description: submit a contract address for a full analysis pipeline run. (requires auth)
 *   `GET /api/scans/{id}/`
     * description: poll the real-time status and current results of a scan. returns current progress out of 100.
-*   `GET /api/scans/`
-    * description: list all historical scans associated with the authenticated user.
+*   `GET /api/scans/?q=&status=&network=&risk_level=&limit=`
+    * description: list the authenticated user's scans (lightweight rows with finding counts). supports search and filters.
+*   `GET /api/scans/stats/`
+    * description: dashboard aggregates (totals, running, average risk, open critical findings, honeypots, watchlist size).
+*   `DELETE /api/scans/{id}/`
+    * description: delete a scan (owner only).
+*   `PATCH /api/vulnerabilities/{id}/`
+    * payload: `{"is_false_positive": true}`
+    * description: owner dismisses or restores a finding; the risk score is recalculated immediately.
+*   `POST /api/scans/{id}/toggle-public/`
+    * payload: `{"is_public": true, "share_label": "ACME Audits"}` (both optional)
+    * description: create / revoke a public share link (`/r/{slug}`).
+*   `POST /api/diff/`
+    * payload: `{"job_a": "<uuid>", "job_b": "<uuid>"}`
+    * description: new / fixed / unchanged findings and risk delta between two completed scans.
+*   `GET /api/health/`
+    * description: liveness + database/cache status for load balancers.
 
 ### 2. observability & reporting
 *   `GET /api/scans/{id}/graph/`
@@ -186,6 +212,12 @@ the platform exposes a rich REST API that can be consumed by external CI/CD pipe
     * description: retrieve the finalized, aggregated JSON security report.
 *   `GET /api/reports/{id}/pdf/`
     * description: dynamically generate and download a stylized PDF of the security audit.
+*   `GET /api/reports/{id}/export/sarif/`
+    * description: SARIF 2.1.0 export — upload to GitHub Code Scanning or open in any SARIF viewer.
+*   `GET /api/reports/{id}/export/json/`
+    * description: full report as a downloadable JSON file.
+*   `WS /ws/scan/{id}/?token=<access jwt>`
+    * description: live progress stream. only the owner (or anyone, for public scans) may subscribe.
 
 ### 3. portfolio monitoring
 *   `GET /api/watchlist/`
@@ -193,12 +225,30 @@ the platform exposes a rich REST API that can be consumed by external CI/CD pipe
 *   `POST /api/watchlist/`
     * payload: `{"address": "0x...", "network": "mainnet", "label": "my dex router"}`
     * description: add a new contract to the watchlist for rapid rescanning and tracking.
+*   `PATCH /api/watchlist/{id}/`
+    * payload: `{"rescan_frequency_days": 7, "alert_on_new_vuln": true}`
+    * description: change the periodic rescan schedule (0 = only on upgrade) and alerting.
 
-### 4. authentication
+the daily watchlist job fingerprints each contract's deployed bytecode (and, for proxies, the current implementation) and queues a rescan + alert when it changes. with `ETH_WSS_URL` set, the on-chain monitor reacts to `Upgraded`, `AdminChanged`, `BeaconUpgraded` and `OwnershipTransferred` events in real time.
+
+### 4. notifications
+*   `GET / PUT / PATCH /api/notifications/settings/`
+    * description: email / slack / telegram channels and the risk-level thresholds that trigger alerts. slack URLs must be `https://hooks.slack.com/services/...`.
+*   `POST /api/notifications/test/`
+    * description: send a test alert on every enabled channel.
+
+### 5. authentication
 *   `POST /api/accounts/register/`
     * payload: `{"username": "dev1", "email": "dev@test.com", "password": "StrongPassword123!"}`
-    * description: register a new user account with strict password validation (min 8 chars, not entirely numeric).
+    * description: register a new user account (min 10 chars, not common, not similar to the username; unique email).
 *   `POST /api/accounts/login/`
     * description: obtain JWT access and refresh tokens.
 *   `POST /api/accounts/token/refresh/`
-    * description: refresh an expired access token using the refresh token.
+    * description: refresh an expired access token using the refresh token (tokens rotate; old refresh tokens are blacklisted).
+*   `POST /api/accounts/logout/`
+    * payload: `{"refresh": "<refresh token>"}` or `{"all": true}`
+    * description: revoke the refresh token (or every session).
+*   `GET / PATCH /api/accounts/profile/` and `POST /api/accounts/password/`
+    * description: view/update email; change password (revokes all sessions).
+
+login, refresh, register and password change are rate limited (`THROTTLE_AUTH`, default 10/minute). see `docs/AUDIT.md` for the full security audit behind these defaults.
