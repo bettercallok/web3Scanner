@@ -2,12 +2,12 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { API, downloadFile, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
+import Icon from "../components/Icon";
 import ReportChat from "../components/ReportChat";
 import VulnGraph from "../components/VulnGraph";
 import RiskGauge from "../components/RiskGauge";
 import VulnCard from "../components/VulnCard";
-import { ScanJob, SEV_LABELS, SEV_ORDER, Severity, Vulnerability } from "../types";
+import { NETWORKS, ScanJob, SEV_LABELS, SEV_ORDER, Severity, Vulnerability } from "../types";
 
 type View = "all" | Severity | "gas" | "graph";
 
@@ -17,30 +17,36 @@ export function ReportBanners({ job }: { job: ScanJob }) {
     <>
       {job.analysis_mode === "bytecode" && (
         <div className="notice">
-          ⚠ No verified source code — this report is based on <strong>bytecode analysis only</strong>. Static analysis and gas
-          checks were skipped and findings carry lower confidence.
+          <div>
+            <strong>Bytecode-only analysis.</strong> No verified source was found, so static analysis and gas checks were
+            skipped and findings carry lower confidence.
+          </div>
         </div>
       )}
       {job.analysis_mode === "abi_only" && (
         <div className="notice notice-red">
-          ⚠ Neither verified source nor deployed bytecode was found at this address. Very little could be analysed.
+          <div>
+            <strong>Nothing to analyse.</strong> Neither verified source nor deployed bytecode was found at this address.
+          </div>
         </div>
       )}
       {job.is_proxy && (
         <div className="notice notice-blue">
-          ⧉ This address is a <strong>{job.proxy_type || "proxy"}</strong> contract. The implementation at{" "}
-          <span className="mono">{job.implementation_address}</span> was analysed. Upgrades can change behaviour at any time —
-          consider adding it to your watchlist.
+          <div>
+            <strong>{job.proxy_type ? `${job.proxy_type.toUpperCase()} proxy.` : "Proxy contract."}</strong> The implementation at{" "}
+            <span className="mono">{job.implementation_address}</span> was analysed. Upgrades can change behaviour at any time —
+            consider adding it to your watchlist.
+          </div>
         </div>
       )}
       {job.is_honeypot === true && hp?.red_flags && hp.red_flags.length > 0 && (
         <div className="notice notice-red">
-          <strong>Honeypot indicators</strong> ({hp.simulation_status}):
-          <ul style={{ margin: "6px 0 0 18px" }}>
-            {hp.red_flags.map((f) => (
-              <li key={f}>{f}</li>
-            ))}
-          </ul>
+          <div>
+            <strong>Honeypot indicators</strong> <span className="muted">({hp.simulation_status})</span>
+            <ul>
+              {hp.red_flags.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          </div>
         </div>
       )}
     </>
@@ -52,31 +58,47 @@ export function GasList({ job }: { job: ScanJob }) {
   const total = gasIssues.reduce((acc, g) => acc + (g.estimated_gas_saving || 0), 0);
   return (
     <>
-      <div className="notice notice-blue">
-        {gasIssues.length} optimization opportunities · estimated <strong>~{total.toLocaleString()} gas</strong> saved per
-        affected call path (rough heuristic).
+      <p className="muted" style={{ marginBottom: 12 }}>
+        {gasIssues.length} optimisation opportunit{gasIssues.length === 1 ? "y" : "ies"} · roughly{" "}
+        <strong style={{ color: "var(--text-1)" }}>{total.toLocaleString()} gas</strong> saved across affected call paths.
+      </p>
+      <div className="findings">
+        {gasIssues.map((g) => (
+          <div key={g.id} className="vuln-card">
+            <div className="vuln-card-header" style={{ cursor: "default" }}>
+              <Icon name="gas" size={16} />
+              <div className="vuln-title-text">{g.title}</div>
+              {g.estimated_gas_saving ? <span className="gas-saving">~{g.estimated_gas_saving} gas</span> : null}
+            </div>
+            <div className="vuln-card-body">
+              {g.description && <p className="vuln-desc">{g.description}</p>}
+              {g.file_path && (
+                <p className="vuln-meta"><Icon name="file" size={13} /> <span>{g.file_path}{g.line_numbers ? `:${g.line_numbers}` : ""}</span></p>
+              )}
+              {g.code_snippet && <pre className="code-block"><code>{g.code_snippet}</code></pre>}
+            </div>
+          </div>
+        ))}
       </div>
-      {gasIssues.map((g) => (
-        <div key={g.id} className="vuln-card">
-          <div className="vuln-card-header" style={{ cursor: "default" }}>
-            <span className="sev-label" style={{ background: "rgba(0,230,168,0.1)", color: "#00e6a8" }}>GAS</span>
-            <div className="vuln-title-text">{g.title}</div>
-            {g.estimated_gas_saving ? (
-              <span className="mono" style={{ color: "#00e6a8", fontSize: 13 }}>~{g.estimated_gas_saving} gas</span>
-            ) : null}
-          </div>
-          <div className="vuln-card-body">
-            {g.description && <p className="vuln-desc">{g.description}</p>}
-            {g.file_path && (
-              <p className="vuln-meta">📁 <span>{g.file_path}{g.line_numbers ? `:${g.line_numbers}` : ""}</span></p>
-            )}
-            {g.code_snippet && (
-              <pre className="code-block"><code>{g.code_snippet}</code></pre>
-            )}
-          </div>
-        </div>
-      ))}
     </>
+  );
+}
+
+export function SeveritySummary({ counts, view, setView }: { counts: Record<string, number>; view: View; setView: (v: View) => void }) {
+  return (
+    <div className="sev-counts">
+      {SEV_ORDER.map((s) => (
+        <button
+          key={s}
+          className={`sev-pill sev-${s} ${view === s ? "is-active" : ""}`}
+          onClick={() => setView(view === s ? "all" : s)}
+          aria-pressed={view === s}
+        >
+          <span className="pill-n">{counts[s]}</span>
+          <span className="pill-t">{SEV_LABELS[s]}</span>
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -110,32 +132,32 @@ function SharePanel({ job, onChange }: { job: ScanJob; onChange: (patch: Partial
   };
 
   return (
-    <div className="card" style={{ padding: 20, marginBottom: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+    <div className="card" style={{ marginBottom: 20 }}>
+      <div className="card-header">
         <div>
-          <h3 style={{ fontSize: 15, marginBottom: 4 }}>🔗 Public sharing</h3>
-          <div className="muted" style={{ fontSize: 13 }}>
-            {job.is_public ? "Anyone with the link can view this report (read-only)." : "Only you can see this report."}
+          <div className="card-title">Public sharing</div>
+          <div className="card-sub">
+            {job.is_public ? "Anyone with the link can view a read-only copy of this report." : "Only you can see this report."}
           </div>
         </div>
         <button className={`btn btn-sm ${job.is_public ? "btn-danger" : "btn-primary"}`} disabled={busy} onClick={() => save(!job.is_public)}>
           {job.is_public ? "Make private" : "Create public link"}
         </button>
       </div>
-      <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
+      <div className="toolbar" style={{ marginBottom: 0 }}>
         <input
           className="form-input"
           style={{ flex: "1 1 220px" }}
           maxLength={100}
-          placeholder="Optional branding label (e.g. ACME Audits)"
+          placeholder="Optional branding label, e.g. ACME Audits"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           aria-label="Share label"
         />
         {job.is_public && (
           <>
-            <button className="btn btn-outline btn-sm" disabled={busy} onClick={() => save(true)}>Save label</button>
-            <button className="btn btn-secondary btn-sm" onClick={copy}>Copy link</button>
+            <button className="btn btn-secondary" disabled={busy} onClick={() => save(true)}>Save label</button>
+            <button className="btn btn-secondary" onClick={copy}><Icon name="copy" size={15} /> Copy link</button>
           </>
         )}
       </div>
@@ -151,8 +173,8 @@ export default function Report() {
   const [view, setView] = useState<View>("all");
   const [showDismissed, setShowDismissed] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [exportError, setExportError] = useState("");
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -168,20 +190,17 @@ export default function Report() {
     return (
       <div className="loading-center">
         <div className="spinner" />
-        <p className="loading-text">// loading report...</p>
+        <p className="loading-text">Loading report…</p>
       </div>
     );
 
   if (error || !job)
     return (
-      <>
-        <Navbar />
-        <div className="error-state">
-          <div className="error-icon">✖</div>
-          <div className="error-msg">{error || "Report not found."}</div>
-          <Link to="/" className="btn btn-primary" style={{ marginTop: "24px" }}>← New Scan</Link>
-        </div>
-      </>
+      <div className="error-state">
+        <div className="error-icon">!</div>
+        <div className="error-msg">{error || "Report not found."}</div>
+        <Link to="/dashboard" className="btn btn-primary" style={{ marginTop: 20 }}>Back to scans</Link>
+      </div>
     );
 
   const all = job.vulnerabilities ?? [];
@@ -196,6 +215,7 @@ export default function Report() {
     .slice()
     .sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity));
   const gasIssues = job.gas_issues || [];
+  const networkLabel = NETWORKS.find((n) => n.value === job.network)?.label ?? job.network;
 
   const toggleFalsePositive = async (v: Vulnerability) => {
     try {
@@ -226,127 +246,108 @@ export default function Report() {
   };
 
   return (
-    <>
-      <Navbar />
+    <div className="report-page">
+      <div className="container">
+        <div className="breadcrumb">
+          <Link to="/dashboard">Scans</Link> <span>/</span> <span>{job.contract_name || "Report"}</span>
+        </div>
 
-      <div className="report-page">
-        <div className="container">
-          <div className="report-header">
+        <div className="page-header report-header">
+          <div style={{ minWidth: 0 }}>
             <div className="report-title-row">
-              <h1 className="report-title">{job.contract_name || "AUDIT REPORT"}</h1>
-              {job.is_honeypot === true && <span className="honeypot-badge">⚠ HONEYPOT</span>}
-              {job.is_honeypot === false && <span className="safe-badge">✔ NOT HONEYPOT</span>}
-              {job.is_public && <span className="swc-chip">PUBLIC</span>}
+              <h1 className="report-title">{job.contract_name || "Untitled contract"}</h1>
+              {job.is_honeypot === true && <span className="honeypot-badge"><Icon name="alert" size={13} /> Honeypot</span>}
+              {job.is_honeypot === false && <span className="safe-badge"><Icon name="check" size={13} /> Not a honeypot</span>}
+              {job.is_public && <span className="status-chip plain"><Icon name="share" size={12} /> Public</span>}
             </div>
-            <div className="mono muted" style={{ fontSize: "12px", marginBottom: "20px", wordBreak: "break-all" }}>
-              {job.address} · {job.network}
-              {job.compiler_version && ` · solc ${job.compiler_version}`}
-              {job.source_file_count && job.source_file_count > 1 ? ` · ${job.source_file_count} files` : ""}
-              {job.created_at && ` · ${new Date(job.created_at).toLocaleString()}`}
-            </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {job.is_owner && (
-                <button className="btn btn-outline btn-sm" onClick={() => setShowShare((s) => !s)} aria-expanded={showShare}>
-                  🔗 Share
-                </button>
-              )}
-              <button id="download-pdf-btn" className="btn btn-outline btn-sm" disabled={!!exporting} onClick={() => doExport("pdf")}>
-                {exporting === "pdf" ? "Preparing…" : "↓ PDF"}
-              </button>
-              <button className="btn btn-outline btn-sm" disabled={!!exporting} onClick={() => doExport("sarif")} title="SARIF 2.1.0 — upload to GitHub Code Scanning">
-                {exporting === "sarif" ? "Preparing…" : "↓ SARIF"}
-              </button>
-              <button className="btn btn-outline btn-sm" disabled={!!exporting} onClick={() => doExport("json")}>
-                {exporting === "json" ? "Preparing…" : "↓ JSON"}
-              </button>
-              {job.address && (
-                <Link to={`/diff?a=${job.id}`} className="btn btn-secondary btn-sm" title="Compare against another scan">
-                  ⇄ Compare
-                </Link>
-              )}
-            </div>
-            {exportError && <div className="error-text" style={{ marginTop: 10 }}>{exportError}</div>}
-          </div>
-
-          {showShare && job.is_owner && <SharePanel job={job} onChange={(patch) => setJob((j) => j && { ...j, ...patch })} />}
-
-          <ReportBanners job={job} />
-
-          <div className="card" style={{ marginBottom: "28px" }}>
-            <div className="score-section">
-              <RiskGauge score={job.risk_score} level={job.risk_level} />
-              <div className="ai-summary">
-                <h3>// AI ANALYSIS SUMMARY</h3>
-                <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: "1.6" }}>
-                  {job.ai_summary || "AI analysis was not available for this scan."}
-                </p>
-              </div>
+            <div className="report-meta">
+              <span className="mono">{job.address}</span>
+              <span>{networkLabel}</span>
+              {job.compiler_version && <span>solc {job.compiler_version}</span>}
+              {job.source_file_count && job.source_file_count > 1 ? <span>{job.source_file_count} files</span> : null}
+              {job.created_at && <span>{new Date(job.created_at).toLocaleString()}</span>}
             </div>
           </div>
-
-          <div className="sev-counts">
-            {SEV_ORDER.map((s) => (
-              <button key={s} className={`sev-pill sev-${s}`} onClick={() => setView(s)} style={{ cursor: "pointer", border: view === s ? "1px solid currentColor" : undefined }}>
-                <div className="pill-n">{counts[s]}</div>
-                <div className="pill-t">{SEV_LABELS[s]}</div>
-              </button>
-            ))}
-          </div>
-
-          <div className="filter-bar">
-            {(["all", ...SEV_ORDER] as const).map((f) => (
-              <button key={f} className={`filter-btn ${view === f ? "active" : ""}`} onClick={() => setView(f)}>
-                {f === "all" ? `All Findings (${vulns.length})` : `${SEV_LABELS[f]} (${counts[f]})`}
-              </button>
-            ))}
-            {gasIssues.length > 0 && (
-              <button className={`filter-btn ${view === "gas" ? "active" : ""}`} onClick={() => setView("gas")}>
-                ⛽ Gas ({gasIssues.length})
+          <div className="report-actions">
+            {job.is_owner && (
+              <button className="btn btn-secondary" onClick={() => setShowShare((s) => !s)} aria-expanded={showShare}>
+                <Icon name="share" size={15} /> Share
               </button>
             )}
-            <button className={`filter-btn ${view === "graph" ? "active" : ""}`} onClick={() => setView("graph")}>
-              ◎ Call Graph
+            <Link to={`/diff?a=${job.id}`} className="btn btn-secondary"><Icon name="compare" size={15} /> Compare</Link>
+            <button id="download-pdf-btn" className="btn btn-primary" disabled={!!exporting} onClick={() => doExport("pdf")}>
+              <Icon name="download" size={15} /> {exporting === "pdf" ? "Preparing…" : "PDF"}
+            </button>
+            <button className="btn btn-outline" disabled={!!exporting} onClick={() => doExport("sarif")} title="SARIF 2.1.0 — upload to GitHub Code Scanning">
+              {exporting === "sarif" ? "Preparing…" : "SARIF"}
+            </button>
+            <button className="btn btn-outline" disabled={!!exporting} onClick={() => doExport("json")}>
+              {exporting === "json" ? "Preparing…" : "JSON"}
             </button>
           </div>
+        </div>
+        {exportError && <div className="notice notice-red" role="alert"><div>{exportError}</div></div>}
 
+        {showShare && job.is_owner && <SharePanel job={job} onChange={(patch) => setJob((j) => j && { ...j, ...patch })} />}
+
+        <ReportBanners job={job} />
+
+        <div className="card score-section" style={{ marginBottom: 20 }}>
+          <RiskGauge score={job.risk_score} level={job.risk_level} />
+          <div className="ai-summary">
+            <h3><Icon name="sparkles" size={15} /> AI summary</h3>
+            <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {job.ai_summary || "AI analysis was not available for this scan."}
+            </p>
+          </div>
+        </div>
+
+        <SeveritySummary counts={counts} view={view} setView={setView} />
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div className="filter-bar" role="tablist">
+            <button className={`filter-btn ${view !== "gas" && view !== "graph" ? "active" : ""}`} onClick={() => setView("all")}>
+              Findings <span className="filter-count">{vulns.length}</span>
+            </button>
+            {gasIssues.length > 0 && (
+              <button className={`filter-btn ${view === "gas" ? "active" : ""}`} onClick={() => setView("gas")}>
+                Gas <span className="filter-count">{gasIssues.length}</span>
+              </button>
+            )}
+            <button className={`filter-btn ${view === "graph" ? "active" : ""}`} onClick={() => setView("graph")}>Call graph</button>
+          </div>
           {view !== "gas" && view !== "graph" && dismissed.length > 0 && (
-            <label className="muted" style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, marginBottom: 16, cursor: "pointer" }}>
+            <label className="muted" style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 13, cursor: "pointer", marginBottom: 16 }}>
               <input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} />
-              Show {dismissed.length} dismissed false positive{dismissed.length === 1 ? "" : "s"}
+              Show {dismissed.length} dismissed
             </label>
           )}
-
-          {view === "graph" ? (
-            <div className="card" style={{ padding: 24, marginBottom: 28 }}>
-              <h3 style={{ marginBottom: 16 }}>// CALL GRAPH & VULNERABLE PATHS</h3>
-              {id && <VulnGraph jobId={id} />}
-            </div>
-          ) : view === "gas" ? (
-            <GasList job={job} />
-          ) : filtered.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "56px" }}>
-              <div style={{ fontSize: "44px", marginBottom: "16px" }}>{view === "all" ? "✔" : "🔍"}</div>
-              <p className="mono muted" style={{ fontSize: "13px" }}>
-                {view === "all"
-                  ? "// no vulnerabilities detected — contract appears clean"
-                  : `// no ${SEV_LABELS[view]?.toLowerCase()} vulnerabilities found`}
-              </p>
-            </div>
-          ) : (
-            filtered.map((v) => (
-              <VulnCard key={v.id} vuln={v} onToggleFalsePositive={job.is_owner ? toggleFalsePositive : undefined} />
-            ))
-          )}
         </div>
+
+        {view === "graph" ? (
+          <div className="card">{id && <VulnGraph jobId={id} />}</div>
+        ) : view === "gas" ? (
+          <GasList job={job} />
+        ) : filtered.length === 0 ? (
+          <div className="card empty-state">
+            <div className="empty-icon"><Icon name="shieldCheck" size={20} /></div>
+            <h3>{view === "all" ? "No vulnerabilities detected" : `No ${SEV_LABELS[view]?.toLowerCase()} findings`}</h3>
+            <p>{view === "all" ? "Automated tools found no issues. A manual review is still recommended." : "Try another severity."}</p>
+          </div>
+        ) : (
+          <div className="findings">
+            {filtered.map((v) => (
+              <VulnCard key={v.id} vuln={v} onToggleFalsePositive={job.is_owner ? toggleFalsePositive : undefined} />
+            ))}
+          </div>
+        )}
+
+        <p className="muted" style={{ fontSize: 12, marginTop: 24 }}>
+          Automated analysis is informational and not a substitute for a manual audit.
+        </p>
       </div>
 
-      <footer className="footer">
-        <p>
-          <strong>Web3 Security Scanner</strong> — This report is for informational purposes only. Always conduct a manual audit before deployment.
-        </p>
-      </footer>
-
       <ReportChat jobId={job.id} />
-    </>
+    </div>
   );
 }

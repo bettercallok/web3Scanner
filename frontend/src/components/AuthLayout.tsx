@@ -1,14 +1,20 @@
 import React from "react";
-import { Link } from "react-router-dom";
 import Icon from "./Icon";
+import { Brand } from "./AppShell";
 
 const POINTS = [
-  "Slither, Mythril & AI review in one pipeline",
+  "Slither, Mythril and AI review in one pipeline",
   "Honeypot and proxy-upgrade detection",
   "PDF, SARIF and shareable public reports",
 ];
 
-/** Two-column auth shell: brand panel on the left, form card on the right (stacks on mobile). */
+const PREVIEW: { sev: string; title: string; swc: string }[] = [
+  { sev: "critical", title: "Unprotected selfdestruct", swc: "SWC-106" },
+  { sev: "high", title: "Reentrancy in withdraw()", swc: "SWC-107" },
+  { sev: "medium", title: "Authorization through tx.origin", swc: "SWC-115" },
+];
+
+/** Two-column auth shell: product panel on the left, form on the right (stacks on mobile). */
 export default function AuthLayout({
   title,
   subtitle,
@@ -23,22 +29,29 @@ export default function AuthLayout({
   return (
     <div className="auth-page">
       <div className="auth-brand">
-        <Link to="/" className="navbar-logo">
-          WEB3<span className="logo-dot">.</span>SCANNER
-        </Link>
+        <Brand sub="Smart contract security" />
         <div>
           <h1 className="auth-headline">
-            Audit smart contracts
-            <span className="title-line-accent">before attackers do</span>
+            Find vulnerabilities <span>before attackers do.</span>
           </h1>
           <ul className="auth-points">
             {POINTS.map((p) => (
               <li key={p}>
-                <span className="auth-check"><Icon name="check" size={14} /></span>
+                <span className="auth-check"><Icon name="check" size={13} /></span>
                 {p}
               </li>
             ))}
           </ul>
+          <div className="auth-preview" aria-hidden="true">
+            {PREVIEW.map((r) => (
+              <div key={r.title} className="auth-preview-row">
+                <span className={`sev-dot dot-${r.sev}`} />
+                <span className={`sev-label label-${r.sev}`}>{r.sev}</span>
+                <span style={{ flex: 1 }}>{r.title}</span>
+                <span className="swc-chip">{r.swc}</span>
+              </div>
+            ))}
+          </div>
         </div>
         <p className="muted auth-fine">Open source · locally hosted LLM · your code never leaves the server.</p>
       </div>

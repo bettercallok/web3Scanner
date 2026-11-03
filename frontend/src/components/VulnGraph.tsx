@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import ForceGraph2D from "react-force-graph-2d";
 import { API } from "../api";
+import Icon from "./Icon";
+
+// Canvas can't read CSS variables, so the palette is mirrored here.
+const COLORS = { contract: "#3fcf8e", fn: "#7c6cff", external: "#6c7487", vulnerable: "#f2556b" };
+const LEGEND = [
+  { color: COLORS.contract, label: "Contract" },
+  { color: COLORS.fn, label: "Function" },
+  { color: COLORS.external, label: "External" },
+  { color: COLORS.vulnerable, label: "Has finding" },
+];
 
 interface GraphNode {
   id: string;
@@ -79,19 +89,15 @@ export default function VulnGraph({ jobId }: { jobId: string }) {
 
   if (loading) {
     return (
-      <div style={{ padding: 60, textAlign: "center", color: "var(--text-3)" }}>
+      <div className="empty-state">
+        <div className="spinner" style={{ margin: "0 auto 14px" }} />
         {generating ? (
-          <div>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>⚙️</div>
-            <div style={{ color: "var(--accent)", fontWeight: 600, marginBottom: 8 }}>
-              Generating Call Graph...
-            </div>
-            <div style={{ fontSize: 13, color: "var(--text-3)" }}>
-              Running Slither analysis on the contract. This may take up to 60 seconds.
-            </div>
-          </div>
+          <>
+            <h3>Generating call graph…</h3>
+            <p>Running Slither on the contract. This can take up to a minute.</p>
+          </>
         ) : (
-          <div style={{ color: "var(--text-3)" }}>Loading graph...</div>
+          <p>Loading graph…</p>
         )}
       </div>
     );
@@ -99,67 +105,43 @@ export default function VulnGraph({ jobId }: { jobId: string }) {
 
   if (error) {
     return (
-      <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>⚠️</div>
-        <div>{error}</div>
+      <div className="empty-state">
+        <div className="empty-icon"><Icon name="alert" size={20} /></div>
+        <p>{error}</p>
       </div>
     );
   }
 
   if (!data.nodes || data.nodes.length === 0) {
     return (
-      <div style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>📊</div>
-        <div>No call graph could be generated for this contract.</div>
-        <div style={{ fontSize: 12, marginTop: 8 }}>This may happen for bytecode-only or ABI-only scans.</div>
+      <div className="empty-state">
+        <div className="empty-icon"><Icon name="branches" size={20} /></div>
+        <h3>No call graph available</h3>
+        <p>This happens for bytecode-only or ABI-only scans.</p>
       </div>
     );
   }
 
   return (
     <div>
-      {/* Graph controls */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: "var(--text-3)" }}>
-          {data.nodes.length} nodes · {data.links.length} edges
-          {data.truncated && " · truncated to the first 300 nodes"}
-        </span>
-        <button
-          onClick={() => graphRef.current?.zoomToFit(400)}
-          style={{
-            marginLeft: "auto",
-            padding: "4px 12px",
-            fontSize: 12,
-            background: "rgba(255,255,255,0.05)",
-            border: "1px solid var(--border)",
-            borderRadius: 6,
-            color: "var(--text-2)",
-            cursor: "pointer",
-          }}
-        >
-          ⊙ Fit Graph
-        </button>
+      <div className="card-header">
+        <div>
+          <div className="card-title">Call graph</div>
+          <div className="card-sub">
+            {data.nodes.length} functions · {data.links.length} calls
+            {data.truncated && " · truncated to the first 300 nodes"}
+          </div>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={() => graphRef.current?.zoomToFit(400, 40)}>Fit to view</button>
       </div>
 
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 16, marginBottom: 10 }}>
-        {[
-          { color: "#00e6a8", label: "Contract" },
-          { color: "#5b8cf5", label: "Function" },
-          { color: "#8a8f98", label: "External" },
-          { color: "#ff3366", label: "Vulnerable" },
-        ].map((item) => (
-          <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-3)" }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: item.color }} />
-            {item.label}
-          </div>
+      <div className="legend">
+        {LEGEND.map((item) => (
+          <span key={item.label}><i style={{ background: item.color }} />{item.label}</span>
         ))}
       </div>
 
-      <div
-        ref={containerRef}
-        style={{ border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", background: "#050507" }}
-      >
+      <div ref={containerRef} className="graph-frame">
         <ForceGraph2D
           ref={graphRef}
           width={dimensions.width}
@@ -167,17 +149,17 @@ export default function VulnGraph({ jobId }: { jobId: string }) {
           graphData={data}
           nodeLabel={(node: any) => node.label || node.id}
           nodeColor={(node: any) => {
-            if (node.vulnerable) return "#ff3366";
-            if (node.group === 1) return "#00e6a8";
-            if (node.group === 2) return "#5b8cf5";
-            return "#8a8f98";
+            if (node.vulnerable) return COLORS.vulnerable;
+            if (node.group === 1) return COLORS.contract;
+            if (node.group === 2) return COLORS.fn;
+            return COLORS.external;
           }}
           nodeRelSize={5}
-          linkColor={() => "rgba(255,255,255,0.12)"}
+          linkColor={() => "rgba(164,170,186,0.18)"}
           linkDirectionalArrowLength={4}
           linkDirectionalArrowRelPos={1}
           linkWidth={1}
-          backgroundColor="#050507"
+          backgroundColor="#0a0c10"
           onEngineStop={() => graphRef.current?.zoomToFit(400, 40)}
         />
       </div>

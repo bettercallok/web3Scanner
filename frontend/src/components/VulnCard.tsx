@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Vulnerability } from "../types";
+import Icon from "./Icon";
 
 interface Props {
   vuln: Vulnerability;
@@ -35,7 +36,7 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
   };
 
   return (
-    <div className="vuln-card" style={dismissed ? { opacity: 0.6 } : undefined}>
+    <div className="vuln-card" style={dismissed ? { opacity: 0.55 } : undefined}>
       <div
         className="vuln-card-header"
         role="button"
@@ -50,7 +51,7 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
         }}
       >
         <div className={`sev-dot dot-${sev}`} />
-        <div className={`sev-label label-${sev}`}>{sev}</div>
+        <div className={`sev-label label-${sev}`}>{sev === "informational" ? "info" : sev}</div>
         <div className="vuln-title-text" style={dismissed ? { textDecoration: "line-through" } : undefined}>
           {vuln.title}
         </div>
@@ -61,7 +62,7 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
         )}
         {vuln.swc_id && <div className="swc-chip">{vuln.swc_id}</div>}
         <div className="tool-chip">{vuln.tool}</div>
-        <span className={`chevron ${open ? "open" : ""}`}>▼</span>
+        <span className={`chevron ${open ? "open" : ""}`}><Icon name="chevronDown" size={16} /></span>
       </div>
       {open && (
         <div className="vuln-card-body">
@@ -70,7 +71,7 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
             <p className="vuln-meta">
               {vuln.file_path && (
                 <>
-                  📁 <span>{vuln.file_path}</span>
+                  <Icon name="file" size={13} /> <span>{vuln.file_path}</span>
                   {vuln.line_numbers && (
                     <>
                       {" · "}Line <span>{vuln.line_numbers}</span>
@@ -86,8 +87,8 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
               {vuln.swc_id && (
                 <>
                   {" · "}
-                  <a href={`https://swcregistry.io/docs/${vuln.swc_id}`} target="_blank" rel="noreferrer noopener" style={{ color: "var(--blue-bright)" }}>
-                    {vuln.swc_id} reference ↗
+                  <a href={`https://swcregistry.io/docs/${vuln.swc_id}`} target="_blank" rel="noreferrer noopener" className="text-link">
+                    {vuln.swc_id} reference
                   </a>
                 </>
               )}
@@ -100,27 +101,25 @@ export default function VulnCard({ vuln, onToggleFalsePositive }: Props) {
           )}
           {vuln.remediation && (
             <div className="remediation-box">
-              <div className="rem-label">✔ Remediation</div>
+              <div className="rem-label">Remediation</div>
               <p>{vuln.remediation}</p>
             </div>
           )}
           {vuln.poc_code && (
-            <div className="poc-box" style={{ marginTop: 16, background: "#1a1a1a", border: "1px solid #333", borderRadius: 6, padding: 16 }}>
+            <div className="poc-box">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div className="poc-label" style={{ color: "var(--orange)", fontSize: 12, fontWeight: "bold", fontFamily: "'JetBrains Mono', monospace" }}>
-                  🧪 AUTO-GENERATED FOUNDRY POC (unverified)
-                </div>
-                <button className="btn btn-outline btn-sm" onClick={copyPoc}>{copied ? "✓ Copied" : "Copy"}</button>
+                <div className="poc-label">Auto-generated Foundry PoC · unverified</div>
+                <button className="btn btn-ghost btn-sm" onClick={copyPoc}><Icon name="copy" size={14} /> {copied ? "Copied" : "Copy"}</button>
               </div>
-              <pre className="code-block" style={{ margin: 0, padding: 12, background: "#0d0d0d", borderRadius: 4 }}>
+              <pre className="code-block">
                 <code>{vuln.poc_code}</code>
               </pre>
             </div>
           )}
           {onToggleFalsePositive && (
-            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
-              <button className={`btn btn-sm ${dismissed ? "btn-outline" : "btn-secondary"}`} disabled={busy} onClick={toggle}>
-                {busy ? "Saving…" : dismissed ? "↺ Restore finding" : "Mark as false positive"}
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button className="btn btn-outline btn-sm" disabled={busy} onClick={toggle}>
+                {busy ? "Saving…" : dismissed ? "Restore finding" : "Mark as false positive"}
               </button>
             </div>
           )}

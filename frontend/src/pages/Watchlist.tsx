@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import { API, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
+import Icon from "../components/Icon";
 import { EVM_ADDRESS, NETWORKS, RISK_COLORS, shortAddress } from "../types";
 
 interface WatchedContract {
@@ -120,19 +120,24 @@ export default function Watchlist() {
 
   return (
     <>
-      <Navbar />
       <div className="page">
         <div className="container">
           <div className="page-header">
-            <h1 className="page-title">PORTFOLIO WATCHLIST</h1>
+            <div>
+              <h1 className="page-title">Watchlist</h1>
+              <p className="page-subtitle">
+                Deployed bytecode (and proxy implementations) are fingerprinted daily; any change triggers an alert and a rescan.
+              </p>
+            </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 28, padding: 24 }}>
-            <h3 style={{ marginBottom: 6 }}>Add contract</h3>
-            <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
-              We fingerprint the deployed bytecode (and proxy implementation) daily and rescan automatically when it changes.
-              You can also schedule periodic rescans. Configure alert channels in <Link to="/settings" style={{ color: "var(--blue-bright)" }}>Settings</Link>.
-            </p>
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div className="card-header">
+              <div>
+                <div className="card-title">Watch a contract</div>
+                <div className="card-sub">Alerts go to the channels configured in <Link to="/settings" className="text-link">Settings</Link>.</div>
+              </div>
+            </div>
             <form onSubmit={handleAdd} className="toolbar" style={{ alignItems: "flex-end", marginBottom: 0 }}>
               <div style={{ flex: "2 1 260px" }}>
                 <label className="field-label" htmlFor="wl-address">Address</label>
@@ -156,7 +161,7 @@ export default function Watchlist() {
                   {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
               </div>
-              <button type="submit" className="btn btn-primary" disabled={adding}>{adding ? "Adding…" : "Add"}</button>
+              <button type="submit" className="btn btn-primary" disabled={adding}><Icon name="plus" size={16} /> {adding ? "Adding…" : "Watch"}</button>
             </form>
           </div>
 
@@ -179,26 +184,27 @@ export default function Watchlist() {
                 {loading ? (
                   <tr><td colSpan={7} className="empty-state">Loading…</td></tr>
                 ) : watchlist.length === 0 ? (
-                  <tr><td colSpan={7} className="empty-state">Your watchlist is empty.</td></tr>
+                  <tr><td colSpan={7} className="empty-state">You're not watching any contracts yet.</td></tr>
                 ) : (
                   watchlist.map((item) => {
                     const s = item.last_scan_summary;
                     return (
                       <tr key={item.id}>
                         <td>
-                          <div style={{ fontWeight: 700 }}>{item.label || "—"}</div>
-                          <div className="mono muted" style={{ fontSize: 12 }} title={item.address}>{shortAddress(item.address)}</div>
+                          <div className="cell-title">{item.label || "Unlabelled"}</div>
+                          <div className="cell-sub" title={item.address}>{shortAddress(item.address)}</div>
                         </td>
-                        <td><span className="status-chip">{item.network}</span></td>
+                        <td className="muted">{NETWORKS.find((n) => n.value === item.network)?.label ?? item.network}</td>
                         <td style={{ fontSize: 13 }}>
                           {s ? (
                             <Link to={`/report/${s.id}`} style={{ textDecoration: "none", color: "inherit" }}>
-                              <strong style={{ color: RISK_COLORS[s.risk_level || ""] ?? "var(--text-2)" }}>
-                                {s.risk_level || "—"} {s.risk_score != null ? `(${Math.round(s.risk_score)})` : ""}
-                              </strong>
-                              <div className="mono" style={{ fontSize: 11 }}>
-                                <span style={{ color: "var(--red)" }}>{s.critical_vulns}C</span> ·{" "}
-                                <span style={{ color: "var(--orange)" }}>{s.high_vulns}H</span> · view →
+                              <span style={{ fontWeight: 600, color: RISK_COLORS[s.risk_level || ""] ?? "var(--text-2)" }}>
+                                {s.risk_score != null ? Math.round(s.risk_score) : "—"}
+                              </span>{" "}
+                              <span className="muted">{s.risk_level}</span>
+                              <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                                {s.critical_vulns > 0 && <span className="sev-label label-critical">{s.critical_vulns} critical</span>}
+                                {s.high_vulns > 0 && <span className="sev-label label-high">{s.high_vulns} high</span>}
                               </div>
                             </Link>
                           ) : (
@@ -208,7 +214,7 @@ export default function Watchlist() {
                         <td>
                           <select
                             className="form-select"
-                            style={{ padding: "6px 10px", fontSize: 12 }}
+                            style={{ height: 30, fontSize: 13 }}
                             value={item.rescan_frequency_days}
                             disabled={busyId === item.id}
                             onChange={(e) => update(item, { rescan_frequency_days: Number(e.target.value) })}
@@ -227,19 +233,20 @@ export default function Watchlist() {
                             disabled={busyId === item.id}
                             onChange={(e) => update(item, { alert_on_new_vuln: e.target.checked })}
                             aria-label="Alert on changes"
-                            style={{ width: 18, height: 18, accentColor: "var(--yellow)" }}
                           />
                         </td>
                         <td className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
                           {item.last_scanned ? new Date(item.last_scanned).toLocaleDateString() : "Never"}
                         </td>
                         <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <button className="btn btn-primary btn-sm" disabled={busyId === item.id} onClick={() => handleRescan(item)}>
-                            ↻ Scan
-                          </button>{" "}
-                          <button className="btn btn-danger btn-sm" disabled={busyId === item.id} onClick={() => handleDelete(item)} aria-label="Remove from watchlist">
-                            ✕
-                          </button>
+                          <span className="row-actions">
+                            <button className="icon-btn" disabled={busyId === item.id} onClick={() => handleDelete(item)} title="Stop watching" aria-label="Remove from watchlist">
+                              <Icon name="trash" size={15} />
+                            </button>
+                            <button className="btn btn-outline btn-sm" disabled={busyId === item.id} onClick={() => handleRescan(item)}>
+                              Scan now
+                            </button>
+                          </span>
                         </td>
                       </tr>
                     );

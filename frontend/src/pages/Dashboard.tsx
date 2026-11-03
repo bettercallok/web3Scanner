@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
+import Icon from "../components/Icon";
 import { ACTIVE_STATUSES, NETWORKS, RISK_COLORS, ScanListItem, shortAddress } from "../types";
 
 interface Stats {
@@ -24,6 +24,32 @@ function statusClass(status: string) {
   return "";
 }
 
+function statusLabel(s: ScanListItem) {
+  if (ACTIVE_STATUSES.includes(s.status)) return `${s.status === "ai_review" ? "AI review" : s.status.charAt(0).toUpperCase() + s.status.slice(1)} · ${s.progress}%`;
+  return s.status.charAt(0).toUpperCase() + s.status.slice(1);
+}
+
+function RiskBar({ stats }: { stats: Stats }) {
+  const levels = ["Critical", "High", "Medium", "Low"];
+  const total = levels.reduce((a, l) => a + (stats.by_risk_level[l] || 0), 0);
+  if (!total) return <div className="muted" style={{ fontSize: 13 }}>No completed scans yet.</div>;
+  return (
+    <>
+      <div style={{ display: "flex", height: 8, borderRadius: 999, overflow: "hidden", background: "var(--surface-3)" }}>
+        {levels.map((l) => {
+          const n = stats.by_risk_level[l] || 0;
+          return n ? <div key={l} title={`${l}: ${n}`} style={{ width: `${(n / total) * 100}%`, background: RISK_COLORS[l] }} /> : null;
+        })}
+      </div>
+      <div className="legend" style={{ marginTop: 10, marginBottom: 0 }}>
+        {levels.map((l) => (
+          <span key={l}><i style={{ background: RISK_COLORS[l] }} />{l} · {stats.by_risk_level[l] || 0}</span>
+        ))}
+      </div>
+    </>
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [scans, setScans] = useState<ScanListItem[]>([]);
@@ -38,10 +64,7 @@ export default function Dashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [list, st] = await Promise.all([
-        axios.get(`${API}/api/scans/`),
-        axios.get(`${API}/api/scans/stats/`),
-      ]);
+      const [list, st] = await Promise.all([axios.get(`${API}/api/scans/`), axios.get(`${API}/api/scans/stats/`)]);
       setScans(list.data.results || list.data);
       setStats(st.data);
       setError("");
@@ -56,7 +79,6 @@ export default function Dashboard() {
     load();
   }, [load]);
 
-  // Keep running scans fresh without a manual reload.
   const hasActive = scans.some((s) => ACTIVE_STATUSES.includes(s.status));
   useEffect(() => {
     if (!hasActive) return;
@@ -69,8 +91,7 @@ export default function Dashboard() {
     return scans.filter(
       (s) =>
         (!q || s.address.toLowerCase().includes(q) || (s.contract_name || "").toLowerCase().includes(q)) &&
-        (!statusFilter ||
-          (statusFilter === "active" ? ACTIVE_STATUSES.includes(s.status) : s.status === statusFilter)) &&
+        (!statusFilter || (statusFilter === "active" ? ACTIVE_STATUSES.includes(s.status) : s.status === statusFilter)) &&
         (!networkFilter || s.network === networkFilter)
     );
   }, [scans, query, statusFilter, networkFilter]);
@@ -103,183 +124,163 @@ export default function Dashboard() {
     }
   };
 
-  const compareReady =
-    selected.length === 2 && selected.every((id) => scans.find((s) => s.id === id)?.status === "complete");
+  const compareReady = selected.length === 2 && selected.every((id) => scans.find((s) => s.id === id)?.status === "complete");
 
   return (
-    <>
-      <Navbar />
-      <div className="page">
-        <div className="container">
-          <div className="page-header">
-            <h1 className="page-title">DASHBOARD</h1>
-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={!compareReady}
-                title={compareReady ? "Compare the two selected scans" : "Select two completed scans to compare"}
-                onClick={() => navigate(`/diff?a=${selected[0]}&b=${selected[1]}`)}
-              >
-                ⇄ Compare selected ({selected.length}/2)
-              </button>
-              <Link to="/" className="btn btn-primary btn-sm">+ New Scan</Link>
-            </div>
+    <div className="page">
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Scans</h1>
+            <p className="page-subtitle">Every contract you've analysed, newest first.</p>
           </div>
-
-          {stats && (
-            <div className="kpi-grid">
-              <div className="kpi">
-                <div className="kpi-value">{stats.total}</div>
-                <div className="kpi-label">Total scans</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-value" style={{ color: "var(--yellow)" }}>{stats.active}</div>
-                <div className="kpi-label">Running</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-value">{stats.avg_risk ?? "—"}</div>
-                <div className="kpi-label">Avg risk score</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-value" style={{ color: "var(--red)" }}>{stats.critical_findings}</div>
-                <div className="kpi-label">Open critical findings</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-value" style={{ color: stats.honeypots ? "var(--red)" : undefined }}>{stats.honeypots}</div>
-                <div className="kpi-label">Honeypots flagged</div>
-              </div>
-              <Link to="/watchlist" className="kpi" style={{ textDecoration: "none", color: "inherit" }}>
-                <div className="kpi-value" style={{ color: "var(--blue-bright)" }}>{stats.watchlist}</div>
-                <div className="kpi-label">Watched contracts →</div>
-              </Link>
-            </div>
-          )}
-
-          {error && <div className="notice notice-red" role="alert">{error}</div>}
-
-          <div className="toolbar">
-            <input
-              className="form-input"
-              style={{ flex: "1 1 240px" }}
-              placeholder="Search address or contract name…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              aria-label="Search scans"
-            />
-            <select className="form-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
-              <option value="">All statuses</option>
-              <option value="complete">Complete</option>
-              <option value="active">Running</option>
-              <option value="failed">Failed</option>
-            </select>
-            <select className="form-select" value={networkFilter} onChange={(e) => setNetworkFilter(e.target.value)} aria-label="Filter by network">
-              <option value="">All networks</option>
-              {NETWORKS.map((n) => (
-                <option key={n.value} value={n.value}>{n.label}</option>
-              ))}
-            </select>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button
+              className="btn btn-secondary"
+              disabled={!compareReady}
+              title={compareReady ? "Compare the two selected scans" : "Select two completed scans to compare"}
+              onClick={() => navigate(`/diff?a=${selected[0]}&b=${selected[1]}`)}
+            >
+              <Icon name="compare" size={16} /> Compare{selected.length ? ` (${selected.length}/2)` : ""}
+            </button>
+            <Link to="/" className="btn btn-primary"><Icon name="plus" size={16} /> New scan</Link>
           </div>
-
-          {loading ? (
-            <div className="empty-state">Loading scans…</div>
-          ) : scans.length === 0 ? (
-            <div className="card empty-state">
-              <div style={{ fontSize: 40, marginBottom: 16 }}>🔍</div>
-              <p>No scans yet. Start by scanning a smart contract.</p>
-              <Link to="/" className="btn btn-primary btn-sm" style={{ marginTop: 16 }}>Scan a contract</Link>
-            </div>
-          ) : (
-            <div className="card table-wrap" style={{ padding: 0 }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 36 }} aria-label="Select" />
-                    <th>Contract</th>
-                    <th>Network</th>
-                    <th>Status</th>
-                    <th>Risk</th>
-                    <th>Findings</th>
-                    <th>Date</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="empty-state">No scans match these filters.</td>
-                    </tr>
-                  )}
-                  {filtered.map((scan) => {
-                    const active = ACTIVE_STATUSES.includes(scan.status);
-                    return (
-                      <tr key={scan.id}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={selected.includes(scan.id)}
-                            disabled={scan.status !== "complete"}
-                            onChange={() => toggleSelect(scan.id)}
-                            aria-label={`Select ${scan.contract_name || scan.address} for comparison`}
-                          />
-                        </td>
-                        <td>
-                          <div style={{ fontWeight: 700 }}>
-                            {scan.contract_name || "Unknown"}
-                            {scan.is_proxy && <span className="swc-chip" style={{ marginLeft: 8 }}>PROXY</span>}
-                            {scan.is_honeypot && <span className="honeypot-badge" style={{ marginLeft: 8, fontSize: 10, padding: "2px 6px" }}>HONEYPOT</span>}
-                          </div>
-                          <div className="mono muted" style={{ fontSize: 12 }}>{shortAddress(scan.address)}</div>
-                        </td>
-                        <td><span className="status-chip">{scan.network}</span></td>
-                        <td>
-                          <span className={`status-chip ${statusClass(scan.status)}`}>
-                            {active ? `${scan.status.replace("_", " ")} ${scan.progress}%` : scan.status}
-                          </span>
-                        </td>
-                        <td className="mono">
-                          {scan.risk_score != null ? (
-                            <span style={{ color: RISK_COLORS[scan.risk_level] ?? "var(--text-2)" }}>
-                              {Math.round(scan.risk_score)}/100
-                            </span>
-                          ) : "—"}
-                        </td>
-                        <td className="mono" style={{ fontSize: 13 }}>
-                          {scan.status === "complete" ? (
-                            <>
-                              {scan.finding_count}
-                              {scan.critical_count > 0 && <span style={{ color: "var(--red)" }}> · {scan.critical_count}C</span>}
-                              {scan.high_count > 0 && <span style={{ color: "var(--orange)" }}> · {scan.high_count}H</span>}
-                            </>
-                          ) : "—"}
-                        </td>
-                        <td className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
-                          {new Date(scan.created_at).toLocaleDateString()}
-                        </td>
-                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                          <Link
-                            to={active ? `/scan/${scan.id}` : `/report/${scan.id}`}
-                            className="btn btn-secondary btn-sm"
-                          >
-                            {active ? "Progress" : "View"}
-                          </Link>{" "}
-                          {!active && (
-                            <button className="btn btn-outline btn-sm" disabled={busy === scan.id} onClick={() => handleRescan(scan)} title="Scan this contract again">
-                              ↻
-                            </button>
-                          )}{" "}
-                          <button className="btn btn-danger btn-sm" disabled={busy === scan.id} onClick={() => handleDelete(scan)} aria-label="Delete scan">
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
+
+        {stats && (
+          <>
+            <div className="kpi-grid">
+              <div className="kpi"><div className="kpi-label">Total scans</div><div className="kpi-value">{stats.total}</div></div>
+              <div className="kpi"><div className="kpi-label">Running</div><div className="kpi-value" style={{ color: stats.active ? "var(--accent-text)" : undefined }}>{stats.active}</div></div>
+              <div className="kpi"><div className="kpi-label">Average risk</div><div className="kpi-value">{stats.avg_risk ?? "—"}</div></div>
+              <div className="kpi"><div className="kpi-label">Open critical findings</div><div className="kpi-value" style={{ color: stats.critical_findings ? "var(--sev-critical)" : undefined }}>{stats.critical_findings}</div></div>
+              <div className="kpi"><div className="kpi-label">Honeypots flagged</div><div className="kpi-value" style={{ color: stats.honeypots ? "var(--sev-critical)" : undefined }}>{stats.honeypots}</div></div>
+            </div>
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div className="card-header" style={{ marginBottom: 12 }}>
+                <span className="card-title">Risk distribution</span>
+                <span className="card-sub">{stats.complete} completed scans</span>
+              </div>
+              <RiskBar stats={stats} />
+            </div>
+          </>
+        )}
+
+        {error && <div className="notice notice-red" role="alert">{error}</div>}
+
+        <div className="toolbar">
+          <div style={{ position: "relative", flex: "1 1 260px" }}>
+            <span style={{ position: "absolute", left: 10, top: 11, color: "var(--text-3)" }}><Icon name="search" size={16} /></span>
+            <input className="form-input input-block" style={{ paddingLeft: 34 }} placeholder="Search by address or contract name" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search scans" />
+          </div>
+          <select className="form-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} aria-label="Filter by status">
+            <option value="">All statuses</option>
+            <option value="complete">Complete</option>
+            <option value="active">Running</option>
+            <option value="failed">Failed</option>
+          </select>
+          <select className="form-select" value={networkFilter} onChange={(e) => setNetworkFilter(e.target.value)} aria-label="Filter by network">
+            <option value="">All networks</option>
+            {NETWORKS.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="card muted">Loading scans…</div>
+        ) : scans.length === 0 ? (
+          <div className="card empty-state">
+            <div className="empty-icon"><Icon name="search" size={20} /></div>
+            <h3>No scans yet</h3>
+            <p style={{ marginBottom: 16 }}>Scan your first contract to see results here.</p>
+            <Link to="/" className="btn btn-primary">Scan a contract</Link>
+          </div>
+        ) : (
+          <div className="card table-wrap" style={{ padding: 0 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th style={{ width: 40 }} aria-label="Select" />
+                  <th>Contract</th>
+                  <th>Network</th>
+                  <th>Status</th>
+                  <th>Risk</th>
+                  <th>Findings</th>
+                  <th>Date</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr><td colSpan={8} className="empty-state">No scans match these filters.</td></tr>
+                )}
+                {filtered.map((scan) => {
+                  const active = ACTIVE_STATUSES.includes(scan.status);
+                  return (
+                    <tr key={scan.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(scan.id)}
+                          disabled={scan.status !== "complete"}
+                          onChange={() => toggleSelect(scan.id)}
+                          aria-label={`Select ${scan.contract_name || scan.address} for comparison`}
+                        />
+                      </td>
+                      <td>
+                        <Link to={active ? `/scan/${scan.id}` : `/report/${scan.id}`} style={{ textDecoration: "none" }}>
+                          <div className="cell-title">
+                            {scan.contract_name || "Unknown contract"}
+                            {scan.is_proxy && <span className="status-chip plain">Proxy</span>}
+                            {scan.is_honeypot && <span className="honeypot-badge">Honeypot</span>}
+                          </div>
+                          <div className="cell-sub">{shortAddress(scan.address)}</div>
+                        </Link>
+                      </td>
+                      <td className="muted">{NETWORKS.find((n) => n.value === scan.network)?.label ?? scan.network}</td>
+                      <td><span className={`status-chip ${statusClass(scan.status)}`}>{statusLabel(scan)}</span></td>
+                      <td>
+                        {scan.risk_score != null ? (
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontWeight: 600, fontVariantNumeric: "tabular-nums", color: RISK_COLORS[scan.risk_level] ?? "var(--text-2)" }}>
+                              {Math.round(scan.risk_score)}
+                            </span>
+                            <span className="muted" style={{ fontSize: 12 }}>{scan.risk_level}</span>
+                          </span>
+                        ) : <span className="muted">—</span>}
+                      </td>
+                      <td>
+                        {scan.status === "complete" ? (
+                          <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                            <span style={{ fontVariantNumeric: "tabular-nums" }}>{scan.finding_count}</span>
+                            {scan.critical_count > 0 && <span className="sev-label label-critical">{scan.critical_count} critical</span>}
+                            {scan.high_count > 0 && <span className="sev-label label-high">{scan.high_count} high</span>}
+                          </span>
+                        ) : <span className="muted">—</span>}
+                      </td>
+                      <td className="muted" style={{ whiteSpace: "nowrap" }}>{new Date(scan.created_at).toLocaleDateString()}</td>
+                      <td style={{ textAlign: "right" }}>
+                        <span className="row-actions">
+                          {!active && (
+                            <button className="icon-btn" disabled={busy === scan.id} onClick={() => handleRescan(scan)} title="Scan again" aria-label="Scan again">
+                              <Icon name="refresh" size={15} />
+                            </button>
+                          )}
+                          <button className="icon-btn" disabled={busy === scan.id} onClick={() => handleDelete(scan)} title="Delete scan" aria-label="Delete scan">
+                            <Icon name="trash" size={15} />
+                          </button>
+                          <Link to={active ? `/scan/${scan.id}` : `/report/${scan.id}`} className="btn btn-outline btn-sm">
+                            {active ? "Progress" : "Open"}
+                          </Link>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-    </>
+    </div>
   );
 }

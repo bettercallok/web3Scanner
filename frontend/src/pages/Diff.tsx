@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useState, FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
 import { API, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
+import Icon from "../components/Icon";
 
-// ─── Types ────────────────────────────────────────────────────
 interface DiffVuln {
   title: string;
   severity: string;
@@ -32,117 +31,68 @@ interface DiffResult {
   summary: { new_count: number; fixed_count: number; unchanged_count: number };
 }
 
-// ─── Severity badge ───────────────────────────────────────────
-const SEV_COLORS: Record<string, string> = {
-  critical: "#ff2d55",
-  high:     "#ff6b35",
-  medium:   "#ffd60a",
-  low:      "#30d158",
-  informational: "#636e72",
+type Tab = "new" | "fixed" | "unchanged";
+const TAG: Record<Tab, { cls: string; text: string }> = {
+  new: { cls: "diff-new", text: "New" },
+  fixed: { cls: "diff-fixed", text: "Fixed" },
+  unchanged: { cls: "diff-same", text: "Unchanged" },
 };
 
-function SevBadge({ sev }: { sev: string }) {
-  const color = SEV_COLORS[sev] ?? "#636e72";
+function DiffRow({ vuln, tab }: { vuln: DiffVuln; tab: Tab }) {
+  const sev = vuln.severity || "informational";
   return (
-    <span style={{
-      background: color + "22",
-      color,
-      border: `1px solid ${color}55`,
-      borderRadius: 4,
-      padding: "2px 8px",
-      fontSize: 11,
-      fontWeight: 700,
-      fontFamily: "'JetBrains Mono', monospace",
-      textTransform: "uppercase",
-      letterSpacing: 1,
-    }}>
-      {sev}
-    </span>
-  );
-}
-
-// ─── Vuln card in diff ────────────────────────────────────────
-function DiffVulnCard({
-  vuln,
-  accent,
-  tag,
-}: {
-  vuln: DiffVuln;
-  accent: string;
-  tag: string;
-}) {
-  return (
-    <div style={{
-      background: "var(--card-bg)",
-      border: `1px solid ${accent}44`,
-      borderLeft: `3px solid ${accent}`,
-      borderRadius: 8,
-      padding: "14px 18px",
-      marginBottom: 10,
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-        <span style={{
-          background: accent + "22",
-          color: accent,
-          border: `1px solid ${accent}55`,
-          borderRadius: 4,
-          padding: "2px 8px",
-          fontSize: 11,
-          fontWeight: 700,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>{tag}</span>
-        <SevBadge sev={vuln.severity} />
-        {vuln.swc_id && (
-          <span style={{ color: "var(--text-3)", fontSize: 11, fontFamily: "'JetBrains Mono', monospace" }}>
-            {vuln.swc_id}
-          </span>
-        )}
+    <div className="diff-card">
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
+        <span className={`diff-tag ${TAG[tab].cls}`}>{TAG[tab].text}</span>
+        <span className={`sev-label label-${sev}`}>{sev === "informational" ? "info" : sev}</span>
+        <span style={{ fontWeight: 500 }}>{vuln.title}</span>
+        {vuln.swc_id && <span className="swc-chip">{vuln.swc_id}</span>}
       </div>
-      <div style={{ fontWeight: 600, color: "var(--text-1)", fontSize: 14, marginBottom: 4 }}>
-        {vuln.title}
-      </div>
-      <div style={{ color: "var(--text-2)", fontSize: 13, lineHeight: 1.6 }}>
-        {vuln.description.slice(0, 200)}{vuln.description.length > 200 ? "…" : ""}
-      </div>
+      {vuln.description && (
+        <div className="vuln-desc" style={{ fontSize: 13 }}>
+          {vuln.description.slice(0, 220)}{vuln.description.length > 220 ? "…" : ""}
+        </div>
+      )}
       {vuln.file_path && (
-        <div style={{ color: "var(--text-3)", fontSize: 12, marginTop: 6, fontFamily: "'JetBrains Mono', monospace" }}>
-          📁 {vuln.file_path}{vuln.line_numbers ? ` : ${vuln.line_numbers}` : ""}
+        <div className="vuln-meta" style={{ marginTop: 6 }}>
+          <Icon name="file" size={13} /> <span>{vuln.file_path}{vuln.line_numbers ? `:${vuln.line_numbers}` : ""}</span>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────
 export default function Diff() {
   const [params, setParams] = useSearchParams();
   const [jobA, setJobA] = useState(params.get("a") || "");
   const [jobB, setJobB] = useState(params.get("b") || "");
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
-  const [result, setResult]   = useState<DiffResult | null>(null);
-  const [activeTab, setActiveTab] = useState<"new" | "fixed" | "unchanged">("new");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<DiffResult | null>(null);
+  const [tab, setTab] = useState<Tab>("new");
 
-  const runDiff = useCallback(async (a: string, b: string) => {
-    setError("");
-    setResult(null);
-    if (!a.trim() || !b.trim()) {
-      setError("Enter both Scan IDs.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const res = await axios.post(`${API}/api/diff/`, { job_a: a.trim(), job_b: b.trim() });
-      setResult(res.data);
-      setParams({ a: a.trim(), b: b.trim() }, { replace: true });
-    } catch (err) {
-      setError(errorMessage(err, "Diff failed."));
-    } finally {
-      setLoading(false);
-    }
-  }, [setParams]);
+  const runDiff = useCallback(
+    async (a: string, b: string) => {
+      setError("");
+      setResult(null);
+      if (!a.trim() || !b.trim()) {
+        setError("Enter both scan IDs.");
+        return;
+      }
+      setLoading(true);
+      try {
+        const res = await axios.post(`${API}/api/diff/`, { job_a: a.trim(), job_b: b.trim() });
+        setResult(res.data);
+        setParams({ a: a.trim(), b: b.trim() }, { replace: true });
+      } catch (err) {
+        setError(errorMessage(err, "Comparison failed."));
+      } finally {
+        setLoading(false);
+      }
+    },
+    [setParams]
+  );
 
-  // Deep links from the dashboard / report (?a=<id>&b=<id>) run immediately.
   useEffect(() => {
     const a = params.get("a");
     const b = params.get("b");
@@ -155,172 +105,97 @@ export default function Diff() {
     runDiff(jobA, jobB);
   };
 
-  const riskColor = (delta: number) =>
-    delta > 10 ? "var(--red)" : delta < -10 ? "var(--green)" : "var(--yellow)";
-
-  const tabs = [
-    { key: "new",       label: "🔴 New",      count: result?.summary.new_count     ?? 0 },
-    { key: "fixed",     label: "🟢 Fixed",    count: result?.summary.fixed_count   ?? 0 },
-    { key: "unchanged", label: "⚪ Unchanged", count: result?.summary.unchanged_count ?? 0 },
-  ] as const;
+  const list: Record<Tab, DiffVuln[]> = {
+    new: result?.new_vulns ?? [],
+    fixed: result?.fixed_vulns ?? [],
+    unchanged: result?.unchanged_vulns ?? [],
+  };
+  const empty: Record<Tab, string> = {
+    new: "No new vulnerabilities were introduced.",
+    fixed: "No vulnerabilities were fixed between these scans.",
+    unchanged: "No findings are shared between these scans.",
+  };
 
   return (
-    <>
-      <Navbar badge="DIFF" />
-
-      <div className="scan-page">
-        <div className="container">
-          <h1 className="page-heading">
-            <span className="accent-red">CONTRACT</span>{" "}
-            <span className="accent-blue">DIFF</span>{" "}
-            <span className="accent-yellow">ANALYSIS</span>
-          </h1>
-          <p style={{ color: "var(--text-2)", fontSize: 15, marginBottom: 32, textAlign: "center" }}>
-            Compare two completed scans — see what vulnerabilities were introduced or fixed.
-          </p>
-
-          {/* Input form */}
-          <div className="card" style={{ marginBottom: 28 }}>
-            <form onSubmit={handleSubmit}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div>
-                  <div style={{ color: "var(--text-3)", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", marginBottom: 6 }}>
-                    SCAN A (baseline)
-                  </div>
-                  <input
-                    id="diff-job-a"
-                    className="form-input"
-                    value={jobA}
-                    onChange={e => setJobA(e.target.value)}
-                    placeholder="Paste Scan ID (UUID)…"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </div>
-                <div>
-                  <div style={{ color: "var(--text-3)", fontSize: 12, fontFamily: "'JetBrains Mono', monospace", marginBottom: 6 }}>
-                    SCAN B (compare)
-                  </div>
-                  <input
-                    id="diff-job-b"
-                    className="form-input"
-                    value={jobB}
-                    onChange={e => setJobB(e.target.value)}
-                    placeholder="Paste Scan ID (UUID)…"
-                    spellCheck={false}
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-              {error && <div className="form-error" style={{ marginTop: 12 }}>⚠ {error}</div>}
-              <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
-                <button id="diff-submit-btn" type="submit" className="btn btn-primary" disabled={loading}>
-                  {loading ? "COMPARING…" : "⚡ COMPARE SCANS"}
-                </button>
-              </div>
-            </form>
+    <div className="page">
+      <div className="container">
+        <div className="page-header">
+          <div>
+            <h1 className="page-title">Compare scans</h1>
+            <p className="page-subtitle">See which findings were introduced, fixed or unchanged between two completed scans.</p>
           </div>
-
-          {/* Results */}
-          {result && (
-            <>
-              {/* Summary cards */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16, marginBottom: 24 }}>
-                <div className="card" style={{ textAlign: "center", padding: "18px 10px" }}>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 8 }}>
-                    RISK DELTA
-                  </div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: riskColor(result.risk_delta), fontFamily: "'JetBrains Mono', monospace" }}>
-                    {result.risk_delta > 0 ? "+" : ""}{result.risk_delta}
-                  </div>
-                </div>
-                <div className="card" style={{ textAlign: "center", padding: "18px 10px", borderColor: "var(--red)" }}>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 8 }}>NEW VULNS</div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "var(--red)", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {result.summary.new_count}
-                  </div>
-                </div>
-                <div className="card" style={{ textAlign: "center", padding: "18px 10px", borderColor: "var(--green)" }}>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 8 }}>FIXED</div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "var(--green)", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {result.summary.fixed_count}
-                  </div>
-                </div>
-                <div className="card" style={{ textAlign: "center", padding: "18px 10px" }}>
-                  <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 8 }}>UNCHANGED</div>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "var(--text-2)", fontFamily: "'JetBrains Mono', monospace" }}>
-                    {result.summary.unchanged_count}
-                  </div>
-                </div>
-              </div>
-
-              {/* Contract addresses */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-                {[
-                  { label: "SCAN A", job: result.job_a, color: "var(--blue)" },
-                  { label: "SCAN B", job: result.job_b, color: "var(--yellow)" },
-                ].map(({ label, job, color }) => (
-                  <div key={job.id} className="card" style={{ borderColor: color, padding: "14px 18px" }}>
-                    <div style={{ fontSize: 11, color: "var(--text-3)", fontFamily: "'JetBrains Mono', monospace", marginBottom: 4 }}>{label}</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--text-1)", marginBottom: 4 }}>
-                      {job.address}
-                    </div>
-                    <div style={{ color: "var(--text-3)", fontSize: 12 }}>
-                      Risk Score: <span style={{ color, fontWeight: 700 }}>{job.risk_score?.toFixed(1) ?? "—"}</span>
-                    </div>
-                    <Link to={`/report/${job.id}`} style={{ color, fontSize: 12, textDecoration: "none", marginTop: 4, display: "inline-block" }}>
-                      View Report →
-                    </Link>
-                  </div>
-                ))}
-              </div>
-
-              {/* Tabs */}
-              <div className="card">
-                <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--card-border)", marginBottom: 20 }}>
-                  {tabs.map(tab => (
-                    <button
-                      key={tab.key}
-                      id={`diff-tab-${tab.key}`}
-                      onClick={() => setActiveTab(tab.key)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        borderBottom: activeTab === tab.key ? "2px solid var(--blue)" : "2px solid transparent",
-                        padding: "10px 20px",
-                        cursor: "pointer",
-                        color: activeTab === tab.key ? "var(--text-1)" : "var(--text-3)",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        fontSize: 13,
-                        fontWeight: activeTab === tab.key ? 700 : 400,
-                        transition: "all 0.2s",
-                      }}
-                    >
-                      {tab.label} ({tab.count})
-                    </button>
-                  ))}
-                </div>
-
-                {activeTab === "new" && (
-                  result.new_vulns.length > 0
-                    ? result.new_vulns.map((v, i) => <DiffVulnCard key={i} vuln={v} accent="var(--red)" tag="NEW" />)
-                    : <div style={{ color: "var(--green)", padding: "20px", textAlign: "center" }}>✅ No new vulnerabilities introduced!</div>
-                )}
-                {activeTab === "fixed" && (
-                  result.fixed_vulns.length > 0
-                    ? result.fixed_vulns.map((v, i) => <DiffVulnCard key={i} vuln={v} accent="var(--green)" tag="FIXED" />)
-                    : <div style={{ color: "var(--text-3)", padding: "20px", textAlign: "center" }}>No vulnerabilities were fixed between these scans.</div>
-                )}
-                {activeTab === "unchanged" && (
-                  result.unchanged_vulns.length > 0
-                    ? result.unchanged_vulns.map((v, i) => <DiffVulnCard key={i} vuln={v} accent="var(--text-3)" tag="SAME" />)
-                    : <div style={{ color: "var(--green)", padding: "20px", textAlign: "center" }}>✅ No unchanged vulnerabilities.</div>
-                )}
-              </div>
-            </>
-          )}
         </div>
+
+        <form className="card" onSubmit={handleSubmit} style={{ marginBottom: 20 }}>
+          <div className="grid-2">
+            <div>
+              <label className="field-label" htmlFor="diff-job-a">Baseline scan (A)</label>
+              <input id="diff-job-a" className="form-input input-block mono" value={jobA} onChange={(e) => setJobA(e.target.value)} placeholder="Scan ID" spellCheck={false} autoComplete="off" />
+            </div>
+            <div>
+              <label className="field-label" htmlFor="diff-job-b">Comparison scan (B)</label>
+              <input id="diff-job-b" className="form-input input-block mono" value={jobB} onChange={(e) => setJobB(e.target.value)} placeholder="Scan ID" spellCheck={false} autoComplete="off" />
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+            <span className="muted" style={{ fontSize: 13 }}>
+              Tip: select two scans on the <Link to="/dashboard" className="text-link">Scans</Link> page and press Compare.
+            </span>
+            <button id="diff-submit-btn" type="submit" className="btn btn-primary" disabled={loading}>
+              <Icon name="compare" size={16} /> {loading ? "Comparing…" : "Compare"}
+            </button>
+          </div>
+          {error && <div className="form-error" role="alert" style={{ marginTop: 12 }}>{error}</div>}
+        </form>
+
+        {result && (
+          <>
+            <div className="kpi-grid">
+              <div className="kpi">
+                <div className="kpi-label">Risk change</div>
+                <div className={`kpi-value ${result.risk_delta > 0 ? "delta-up" : result.risk_delta < 0 ? "delta-down" : ""}`}>
+                  {result.risk_delta > 0 ? "+" : ""}{result.risk_delta}
+                </div>
+              </div>
+              <div className="kpi"><div className="kpi-label">New</div><div className="kpi-value" style={{ color: result.summary.new_count ? "var(--sev-critical)" : undefined }}>{result.summary.new_count}</div></div>
+              <div className="kpi"><div className="kpi-label">Fixed</div><div className="kpi-value" style={{ color: result.summary.fixed_count ? "var(--sev-low)" : undefined }}>{result.summary.fixed_count}</div></div>
+              <div className="kpi"><div className="kpi-label">Unchanged</div><div className="kpi-value">{result.summary.unchanged_count}</div></div>
+            </div>
+
+            <div className="grid-2" style={{ marginBottom: 20 }}>
+              {[
+                { label: "Scan A · baseline", job: result.job_a },
+                { label: "Scan B · comparison", job: result.job_b },
+              ].map(({ label, job }) => (
+                <div key={job.id} className="card">
+                  <div className="card-sub" style={{ marginBottom: 4 }}>{label}</div>
+                  <div className="mono" style={{ fontSize: 13, overflowWrap: "anywhere", marginBottom: 8 }}>{job.address}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="muted">Risk score <strong style={{ color: "var(--text-1)" }}>{job.risk_score?.toFixed(1) ?? "—"}</strong></span>
+                    <Link to={`/report/${job.id}`} className="link-arrow">Open report <Icon name="arrowRight" size={14} /></Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="filter-bar" role="tablist">
+              {(["new", "fixed", "unchanged"] as Tab[]).map((t) => (
+                <button key={t} id={`diff-tab-${t}`} role="tab" aria-selected={tab === t} className={`filter-btn ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+                  {TAG[t].text} <span className="filter-count">{list[t].length}</span>
+                </button>
+              ))}
+            </div>
+            {list[tab].length > 0 ? (
+              <div className="findings">{list[tab].map((v, i) => <DiffRow key={i} vuln={v} tab={tab} />)}</div>
+            ) : (
+              <div className="card empty-state">
+                <div className="empty-icon"><Icon name="check" size={20} /></div>
+                <p>{empty[tab]}</p>
+              </div>
+            )}
+          </>
+        )}
       </div>
-    </>
+    </div>
   );
 }

@@ -26,7 +26,7 @@ export default function Register() {
       await axios.post(`${API}/api/accounts/register/`, { username, email, password });
       const res = await axios.post(`${API}/api/accounts/login/`, { username, password });
       login(res.data.access, res.data.refresh);
-      navigate("/dashboard");
+      navigate("/");
     } catch (err) {
       setError(errorMessage(err, "Failed to register. Username might be taken."));
     } finally {

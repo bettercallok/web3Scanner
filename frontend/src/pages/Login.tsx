@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate, Navigate } from "react-router-dom";
+import { Link, useNavigate, Navigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
 import { API } from "../api";
@@ -12,9 +12,12 @@ export default function Login() {
   const [submitting, setSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as { from?: string } | null)?.from;
+  const target = from && from !== "/login" ? from : "/";
 
   if (user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={target} replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -24,7 +27,7 @@ export default function Login() {
     try {
       const res = await axios.post(`${API}/api/accounts/login/`, { username, password });
       login(res.data.access, res.data.refresh);
-      navigate("/dashboard");
+      navigate(target, { replace: true });
     } catch (err: any) {
       setError(
         err?.response?.status === 429
@@ -39,7 +42,7 @@ export default function Login() {
   return (
     <AuthLayout
       title="Welcome back"
-      subtitle="Sign in to scan contracts and view your reports."
+      subtitle="Sign in to your workspace to scan contracts and review reports."
       footer={
         <>
           Don't have an account? <Link to="/register" className="text-link">Create one</Link>
