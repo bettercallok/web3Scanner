@@ -3,13 +3,10 @@ Gas Optimization Scanner.
 Runs Slither with gas-specific detectors to identify costly patterns and
 estimate potential gas savings per finding.
 """
-import os
 import re
-import uuid
 import json
 import logging
 import subprocess
-from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,50 +75,32 @@ def run_gas_analysis(
       ...
     ]
     """
-    # Validate job_id
+    from .slither_runner import ensure_solc, write_sources
+    from scanner.security import scan_work_dir, solc_env, validate_solc_version
+
+    validate_solc_version(compiler_version)
+    work_dir = scan_work_dir(job_id, suffix="_gas")
     try:
-        uuid.UUID(str(job_id))
-    except ValueError:
-        raise ValueError(f"Invalid job_id: {job_id}")
-
-    work_dir = os.path.join(settings.SCAN_TMP_DIR, str(job_id))
-    work_dir = os.path.realpath(work_dir)
-    assert work_dir.startswith(os.path.realpath(settings.SCAN_TMP_DIR)), "Path traversal"
-    os.makedirs(work_dir, exist_ok=True)
-
-    # Validate compiler version
-    if not re.fullmatch(r"\d+\.\d+\.\d+", compiler_version):
-        raise ValueError(f"Invalid compiler version: {compiler_version!r}")
-
-    # Write source files
-    if source_map and len(source_map) > 1:
-        from .flattener import write_source_files
-        slither_target = write_source_files(source_map, work_dir)
-        # run on whole dir
-        slither_target = work_dir
-    else:
-        sol_file = os.path.join(work_dir, "contract.sol")
-        if not os.path.exists(sol_file):
-            with open(sol_file, "w", encoding="utf-8") as fh:
-                fh.write(source_code)
-        slither_target = sol_file
-
-    detector_list = ",".join(GAS_DETECTORS)
-
-    result = subprocess.run(
-        [
-            "slither",
-            slither_target,
-            "--detect", detector_list,
-            "--json", "-",
-            "--no-fail-pedantic",
-            "--exclude-dependencies",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=90,
-        cwd=work_dir,
-    )
+        target = write_sources(work_dir, source_code, source_map)
+        ensure_solc(compiler_version)
+        result = subprocess.run(
+            [
+                "slither",
+                target,
+                "--detect", ",".join(GAS_DETECTORS),
+                "--json", "-",
+                "--no-fail-pedantic",
+                "--exclude-dependencies",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=work_dir,
+            env=solc_env(compiler_version),
+        )
+    finally:
+        import shutil
+        shutil.rmtree(work_dir, ignore_errors=True)
 
     stdout = result.stdout.strip()
     if not stdout:
@@ -131,7 +110,7 @@ def run_gas_analysis(
     try:
         raw = json.loads(stdout)
     except json.JSONDecodeError:
-        logger.warning(f"[gas] JSON parse error from Slither gas run")
+        logger.warning("[gas] JSON parse error from Slither gas run")
         return []
 
     return _parse_gas_output(raw)

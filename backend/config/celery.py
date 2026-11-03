@@ -21,4 +21,8 @@ app.conf.beat_schedule = {
         'task': 'scanner.tasks.scheduled_rescan_task',
         'schedule': crontab(hour=1, minute=0), # Run daily at 1 AM
     },
+    'fail_stale_scans_hourly': {
+        'task': 'scanner.tasks.fail_stale_scans_task',
+        'schedule': crontab(minute=15),
+    },
 }

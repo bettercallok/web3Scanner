@@ -13,43 +13,22 @@ the reduced confidence level to the front-end and AI engine.
 """
 import os
 import logging
-import requests
 
 logger = logging.getLogger(__name__)
-
-PUBLIC_RPC = {
-    "mainnet":  "https://ethereum-rpc.publicnode.com",
-    "polygon":  "https://polygon-rpc.com",
-    "bsc":      "https://bsc-dataseed.binance.org",
-    "arbitrum": "https://arb1.arbitrum.io/rpc",
-    "optimism": "https://mainnet.optimism.io",
-}
-
 
 def fetch_bytecode(address: str, network: str) -> str:
     """
     Fetch raw contract bytecode via eth_getCode JSON-RPC.
     Returns the hex-encoded bytecode string (0x-prefixed), or "" if empty/EOA.
     """
-    rpc_url = PUBLIC_RPC.get(network, PUBLIC_RPC["mainnet"])
-    payload = {
-        "jsonrpc": "2.0",
-        "method":  "eth_getCode",
-        "params":  [address, "latest"],
-        "id":      1,
-    }
-    try:
-        resp = requests.post(rpc_url, json=payload, timeout=10)
-        resp.raise_for_status()
-        code = resp.json().get("result", "0x")
-        if code in ("0x", "0x0", "", None):
-            logger.info(f"[decompiler] {address} has no bytecode (EOA or self-destructed)")
-            return ""
+    from .rpc import get_code
+
+    code = get_code(address, network)
+    if code:
         logger.info(f"[decompiler] fetched {len(code)//2} bytes from {address}")
-        return code
-    except Exception as exc:
-        logger.warning(f"[decompiler] eth_getCode failed for {address}: {exc}")
-        return ""
+    else:
+        logger.info(f"[decompiler] {address} has no bytecode (EOA or self-destructed)")
+    return code
 
 
 def write_bytecode_file(bytecode_hex: str, work_dir: str) -> str:

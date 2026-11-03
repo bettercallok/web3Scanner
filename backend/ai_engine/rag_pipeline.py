@@ -3,6 +3,8 @@ LangChain RAG pipeline using Ollama (CodeLlama/Mistral) + ChromaDB.
 Performs semantic vulnerability analysis and false-positive filtering.
 """
 import logging
+import re
+
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -130,11 +132,14 @@ Analyze this contract and respond with the JSON schema defined in your instructi
 
     try:
         response = llm.invoke(_SYSTEM_PROMPT + "\n\n" + user_message)
-        result = _parse_llm_response(response)
+        result = normalize_ai_result(_parse_llm_response(response))
         
         # Phase 2: Generate PoC for High/Critical vulnerabilities
+        # Each PoC is a full LLM round-trip; cap them so one scan cannot hog the AI queue.
+        poc_budget = MAX_POCS
         for v in result.get("vulnerabilities", []):
-            if v.get("severity", "").lower() in ["critical", "high"]:
+            if v.get("severity", "").lower() in ["critical", "high"] and poc_budget > 0:
+                poc_budget -= 1
                 try:
                     logger.info(f"Generating PoC for {v.get('title')}")
                     poc_code = generate_poc(v, source_code)
@@ -149,10 +154,73 @@ Analyze this contract and respond with the JSON schema defined in your instructi
     except Exception as e:
         logger.error(f"LLM inference failed: {e}")
         return {
-            "summary": f"AI analysis could not complete: {e}",
+            "summary": "AI analysis could not complete (model unavailable or timed out).",
             "vulnerabilities": [],
             "false_positives": [],
         }
+
+
+_VALID_SEVERITIES = {"critical", "high", "medium", "low", "informational"}
+_SEVERITY_ALIASES = {"info": "informational", "informative": "informational", "note": "informational",
+                     "moderate": "medium", "severe": "high"}
+_VALID_CONFIDENCE = {"high", "medium", "low"}
+MAX_AI_FINDINGS = 25
+MAX_POCS = 3
+
+
+def normalize_ai_result(result) -> dict:
+    """
+    Coerce untrusted LLM JSON into the schema the task layer expects.
+
+    Small local models frequently emit invalid severities, overly long titles
+    (DB column is 255 chars), non-list fields, or empty strings in
+    ``false_positives`` — the latter would match *every* finding with
+    ``title__icontains=""``. Everything is validated here.
+    """
+    if not isinstance(result, dict):
+        result = {}
+
+    summary = result.get("summary")
+    summary = summary.strip() if isinstance(summary, str) else ""
+
+    vulns = []
+    raw_vulns = result.get("vulnerabilities")
+    for v in raw_vulns if isinstance(raw_vulns, list) else []:
+        if not isinstance(v, dict):
+            continue
+        title = str(v.get("title") or "").strip()
+        if not title:
+            continue
+        sev = str(v.get("severity") or "").strip().lower()
+        sev = _SEVERITY_ALIASES.get(sev, sev)
+        if sev not in _VALID_SEVERITIES:
+            sev = "medium"
+        conf = str(v.get("confidence") or "").strip().lower()
+        if conf not in _VALID_CONFIDENCE:
+            conf = "medium"
+        swc = str(v.get("swc_id") or "").strip().upper()
+        if swc and not re.fullmatch(r"SWC-\d{3}", swc):
+            swc = ""
+        vulns.append({
+            "title": title[:255],
+            "description": str(v.get("description") or "")[:5000],
+            "severity": sev,
+            "confidence": conf,
+            "swc_id": swc,
+            "remediation": str(v.get("remediation") or "")[:5000],
+        })
+        if len(vulns) >= MAX_AI_FINDINGS:
+            break
+
+    fps = []
+    raw_fps = result.get("false_positives")
+    for fp in raw_fps if isinstance(raw_fps, list) else []:
+        fp = str(fp or "").strip()
+        # Require a meaningful title so we never blanket-match every finding.
+        if len(fp) >= 4 and fp not in fps:
+            fps.append(fp[:255])
+
+    return {"summary": summary[:10000], "vulnerabilities": vulns, "false_positives": fps}
 
 
 def generate_poc(vuln: dict, source_code: str) -> str:

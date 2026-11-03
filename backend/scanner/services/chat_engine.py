@@ -23,11 +23,26 @@ Be concise, helpful, and technically accurate. If the user asks how to fix a vul
 provide concrete Solidity code snippets if possible.
 """
 
-def chat_with_report(job, user_message: str) -> str:
+MAX_MESSAGE_CHARS = 2000
+
+
+def history_cache_key(job, user) -> str:
+    # History is per (job, user): public reports are chatted with by many people
+    # and must not leak one viewer's conversation into another's prompt.
+    uid = getattr(user, "id", None) or "anon"
+    return f"chat_history:{job.id}:{uid}"
+
+
+def clear_history(job, user) -> None:
+    cache.delete(history_cache_key(job, user))
+
+
+def chat_with_report(job, user_message: str, user=None) -> str:
     """
     Handle a user question about a specific ScanJob.
-    Maintains a 1-hour conversation history in Redis.
+    Maintains a 1-hour per-user conversation history in the cache.
     """
+    user_message = (user_message or "").strip()[:MAX_MESSAGE_CHARS]
     try:
         from langchain_community.llms import Ollama
         from langchain.schema import HumanMessage, SystemMessage, AIMessage
@@ -41,12 +56,13 @@ def chat_with_report(job, user_message: str) -> str:
 
         # Build context from job - include confirmed vulns AND false positives
         confirmed = []
-        for v in job.vulnerabilities.filter(is_false_positive=False):
-            confirmed.append(f"- [{v.severity.upper()}] {v.title}: {v.description}")
+        for v in job.vulnerabilities.filter(is_false_positive=False)[:40]:
+            confirmed.append(f"- [{v.severity.upper()}] {v.title}: {v.description[:400]}")
 
         false_positives = []
-        for v in job.vulnerabilities.filter(is_false_positive=True):
-            false_positives.append(f"- {v.title}: {v.description} (reason: {v.tool} flagged but AI determined this is benign due to contract design)")
+        for v in job.vulnerabilities.filter(is_false_positive=True)[:20]:
+            who = "a reviewer" if v.false_positive_source == "user" else "the AI"
+            false_positives.append(f"- {v.title}: {v.description[:200]} (reason: {v.tool} flagged but {who} marked it as benign)")
 
         findings_summary = ""
         if confirmed:
@@ -68,7 +84,7 @@ def chat_with_report(job, user_message: str) -> str:
         )
 
         # Retrieve history from cache
-        cache_key = f"chat_history_{job.id}"
+        cache_key = history_cache_key(job, user)
         history = cache.get(cache_key, [])
         
         # We need to construct the prompt manually for the base Ollama class if not using ChatOllama
