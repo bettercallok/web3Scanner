@@ -4,7 +4,6 @@ Detects EIP-1967 / Transparent / UUPS proxy patterns via Etherscan metadata
 and public JSON-RPC storage slot reads, then resolves the implementation address.
 """
 import logging
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -13,15 +12,6 @@ EIP1967_IMPL_SLOT = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505
 
 # OpenZeppelin legacy proxy slot (non-EIP-1967)
 OZ_IMPL_SLOT = "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3"
-
-PUBLIC_RPC = {
-    "mainnet":  "https://ethereum-rpc.publicnode.com",
-    "polygon":  "https://polygon-rpc.com",
-    "bsc":      "https://bsc-dataseed.binance.org",
-    "arbitrum": "https://arb1.arbitrum.io/rpc",
-    "optimism": "https://mainnet.optimism.io",
-}
-
 
 def detect_and_resolve_proxy(address: str, network: str, etherscan_result: dict) -> dict:
     """
@@ -61,23 +51,16 @@ def _read_slot(address: str, slot: str, network: str) -> str:
     Call eth_getStorageAt via public RPC, return the implementation address
     if the slot is non-zero, else empty string.
     """
-    rpc_url = PUBLIC_RPC.get(network, PUBLIC_RPC["mainnet"])
-    payload = {
-        "jsonrpc": "2.0",
-        "method":  "eth_getStorageAt",
-        "params":  [address, slot, "latest"],
-        "id":      1,
-    }
+    from .rpc import rpc_call
+
     try:
-        resp = requests.post(rpc_url, json=payload, timeout=8)
-        resp.raise_for_status()
-        value = resp.json().get("result", "0x")
-        # 32-byte value → last 20 bytes are the address
-        if len(value) >= 42:
-            addr = "0x" + value[-40:]
-            # All zeros means no implementation set
-            if addr != "0x" + "0" * 40:
-                return addr
-    except Exception as exc:
+        value = rpc_call(network, "eth_getStorageAt", [address, slot, "latest"], timeout=8) or "0x"
+    except RuntimeError as exc:
         logger.debug(f"[proxy] RPC slot read failed for {address}: {exc}")
+        return ""
+    # 32-byte value → last 20 bytes are the address
+    if isinstance(value, str) and len(value) >= 42:
+        addr = "0x" + value[-40:].lower()
+        if addr != "0x" + "0" * 40:
+            return addr
     return ""

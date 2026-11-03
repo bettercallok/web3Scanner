@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { Link, useNavigate } from "react-router-dom";
+import { API, errorMessage } from "../api";
+import Navbar from "../components/Navbar";
+import { EVM_ADDRESS, NETWORKS, RISK_COLORS, shortAddress } from "../types";
 
 interface WatchedContract {
   id: number;
@@ -12,6 +12,7 @@ interface WatchedContract {
   label: string;
   last_scanned: string | null;
   alert_on_new_vuln: boolean;
+  rescan_frequency_days: number;
   created_at: string;
   last_scan_summary?: {
     id: string;
@@ -20,209 +21,235 @@ interface WatchedContract {
     created_at: string;
     high_vulns: number;
     critical_vulns: number;
-  };
+  } | null;
 }
 
+const FREQUENCIES = [
+  { value: 0, label: "Upgrades only" },
+  { value: 1, label: "Daily" },
+  { value: 7, label: "Weekly" },
+  { value: 30, label: "Monthly" },
+];
+
 export default function Watchlist() {
-  const { user } = useAuth();
+  const navigate = useNavigate();
   const [watchlist, setWatchlist] = useState<WatchedContract[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
-  
-  // Add new state
+  const [error, setError] = useState("");
+
   const [newAddress, setNewAddress] = useState("");
   const [newNetwork, setNewNetwork] = useState("mainnet");
   const [newLabel, setNewLabel] = useState("");
-  const [addError, setAddError] = useState("");
-  const [rescanStatus, setRescanStatus] = useState<Record<number, "idle" | "loading" | "success" | "error">>({});
+  const [newFrequency, setNewFrequency] = useState(7);
+  const [adding, setAdding] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const fetchWatchlist = () =>
+    axios
+      .get(`${API}/api/watchlist/`)
+      .then((res) => setWatchlist(res.data.results || res.data))
+      .catch((err) => setError(errorMessage(err, "Failed to load watchlist.")))
+      .finally(() => setLoading(false));
 
   useEffect(() => {
     fetchWatchlist();
   }, []);
 
-  const fetchWatchlist = () => {
-    axios.get(`${API}/api/watchlist/`)
-      .then(res => setWatchlist(res.data.results || res.data))
-      .catch(err => console.error(err))
-      .finally(() => setLoading(false));
-  };
-
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    setAddError("");
+    setError("");
+    const address = newAddress.trim();
+    if (!EVM_ADDRESS.test(address)) {
+      setError("Please enter a valid contract address (0x + 40 hex chars).");
+      return;
+    }
+    setAdding(true);
     try {
       await axios.post(`${API}/api/watchlist/`, {
-        address: newAddress.toLowerCase(),
+        address,
         network: newNetwork,
-        label: newLabel,
+        label: newLabel.trim(),
+        rescan_frequency_days: newFrequency,
       });
       setNewAddress("");
       setNewLabel("");
-      fetchWatchlist();
+      await fetchWatchlist();
     } catch (err) {
-      console.error("Failed to add to watchlist", err);
-      setAddError("Failed to add to watchlist. Please check the address.");
+      setError(errorMessage(err, "Failed to add to watchlist."));
+    } finally {
+      setAdding(false);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const update = async (item: WatchedContract, patch: Partial<WatchedContract>) => {
+    setBusyId(item.id);
+    setWatchlist((list) => list.map((w) => (w.id === item.id ? { ...w, ...patch } : w)));
     try {
-      await axios.delete(`${API}/api/watchlist/${id}/`);
+      await axios.patch(`${API}/api/watchlist/${item.id}/`, patch);
+    } catch (err) {
+      setError(errorMessage(err, "Failed to update."));
       fetchWatchlist();
-    } catch (err) {
-      console.error("Failed to delete", err);
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const handleRescan = async (contract: WatchedContract) => {
-    setRescanStatus(prev => ({ ...prev, [contract.id]: "loading" }));
+  const handleDelete = async (item: WatchedContract) => {
+    if (!window.confirm(`Stop watching ${item.label || item.address}?`)) return;
+    setBusyId(item.id);
     try {
-      await axios.post(`${API}/api/scans/create/`, {
-        address: contract.address,
-        network: contract.network,
-      });
-      setRescanStatus(prev => ({ ...prev, [contract.id]: "success" }));
-      setTimeout(() => setRescanStatus(prev => ({ ...prev, [contract.id]: "idle" })), 3000);
+      await axios.delete(`${API}/api/watchlist/${item.id}/`);
+      setWatchlist((list) => list.filter((w) => w.id !== item.id));
     } catch (err) {
-      console.error("Failed to rescan", err);
-      setRescanStatus(prev => ({ ...prev, [contract.id]: "error" }));
-      setTimeout(() => setRescanStatus(prev => ({ ...prev, [contract.id]: "idle" })), 3000);
+      setError(errorMessage(err, "Failed to remove."));
+    } finally {
+      setBusyId(null);
     }
   };
 
-  if (!user) {
-    return <div style={{ padding: 40, textAlign: "center" }}>Please <Link to="/login">login</Link> to view your watchlist.</div>;
-  }
+  const handleRescan = async (item: WatchedContract) => {
+    setBusyId(item.id);
+    try {
+      const res = await axios.post(`${API}/api/scans/create/`, { address: item.address, network: item.network });
+      navigate(`/scan/${res.data.id}`);
+    } catch (err) {
+      setError(errorMessage(err, "Failed to start scan."));
+      setBusyId(null);
+    }
+  };
 
   return (
-    <div className="watchlist-page" style={{ padding: "40px 20px", maxWidth: 1000, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 32 }}>
-        <h1 style={{ fontFamily: "'JetBrains Mono', monospace", margin: 0 }}>PORTFOLIO WATCHLIST</h1>
-        <Link to="/dashboard" className="btn btn-outline" style={{ fontSize: 13 }}>← Back to Dashboard</Link>
-      </div>
+    <>
+      <Navbar />
+      <div className="page">
+        <div className="container">
+          <div className="page-header">
+            <h1 className="page-title">PORTFOLIO WATCHLIST</h1>
+          </div>
 
-      <div className="card" style={{ marginBottom: 32, padding: 24 }}>
-        <h3>Add Contract to Watchlist</h3>
-        <p style={{ color: "var(--text-3)", fontSize: 14, marginBottom: 16 }}>
-          We will monitor this contract for upgrades, byte-code changes, and automatically rescan when triggered.
-        </p>
-        <form onSubmit={handleAdd} style={{ display: "flex", gap: 16, alignItems: "flex-end", marginBottom: addError ? 12 : 0 }}>
-          <div style={{ flex: 2 }}>
-            <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Address</label>
-            <input type="text" className="form-input" style={{ width: "100%" }} required
-              value={newAddress} onChange={e => setNewAddress(e.target.value)} placeholder="0x..." />
+          <div className="card" style={{ marginBottom: 28, padding: 24 }}>
+            <h3 style={{ marginBottom: 6 }}>Add contract</h3>
+            <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+              We fingerprint the deployed bytecode (and proxy implementation) daily and rescan automatically when it changes.
+              You can also schedule periodic rescans. Configure alert channels in <Link to="/settings" style={{ color: "var(--blue-bright)" }}>Settings</Link>.
+            </p>
+            <form onSubmit={handleAdd} className="toolbar" style={{ alignItems: "flex-end", marginBottom: 0 }}>
+              <div style={{ flex: "2 1 260px" }}>
+                <label className="field-label" htmlFor="wl-address">Address</label>
+                <input id="wl-address" type="text" className="form-input" style={{ width: "100%" }} required
+                  value={newAddress} onChange={(e) => setNewAddress(e.target.value)} placeholder="0x…" spellCheck={false} />
+              </div>
+              <div style={{ flex: "1 1 150px" }}>
+                <label className="field-label" htmlFor="wl-network">Network</label>
+                <select id="wl-network" className="form-select" style={{ width: "100%" }} value={newNetwork} onChange={(e) => setNewNetwork(e.target.value)}>
+                  {NETWORKS.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
+                </select>
+              </div>
+              <div style={{ flex: "1 1 150px" }}>
+                <label className="field-label" htmlFor="wl-label">Label (optional)</label>
+                <input id="wl-label" type="text" className="form-input" style={{ width: "100%" }} maxLength={100}
+                  value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="e.g. Yield Vault" />
+              </div>
+              <div style={{ flex: "1 1 140px" }}>
+                <label className="field-label" htmlFor="wl-freq">Rescan</label>
+                <select id="wl-freq" className="form-select" style={{ width: "100%" }} value={newFrequency} onChange={(e) => setNewFrequency(Number(e.target.value))}>
+                  {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                </select>
+              </div>
+              <button type="submit" className="btn btn-primary" disabled={adding}>{adding ? "Adding…" : "Add"}</button>
+            </form>
           </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Network</label>
-            <select className="form-select" style={{ width: "100%", height: 48, padding: "12px 16px", boxSizing: "border-box", appearance: "none", WebkitAppearance: "none" }} value={newNetwork} onChange={e => setNewNetwork(e.target.value)}>
-              <option value="mainnet">Ethereum</option>
-              <option value="polygon">Polygon</option>
-              <option value="bsc">BSC</option>
-            </select>
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ display: "block", marginBottom: 8, fontSize: 12 }}>Label (Optional)</label>
-            <input type="text" className="form-input" style={{ width: "100%" }} 
-              value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Yield Vault" />
-          </div>
-          <button type="submit" className="btn btn-primary" style={{ height: 44 }}>Add</button>
-        </form>
-        {addError && <div style={{ color: "var(--red)", fontSize: 13, marginTop: 8 }}>{addError}</div>}
-      </div>
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-          <thead style={{ background: "rgba(255,255,255,0.05)", borderBottom: "1px solid var(--border)" }}>
-            <tr>
-              <th style={{ padding: "16px 20px" }}>Label</th>
-              <th style={{ padding: "16px 20px" }}>Address</th>
-              <th style={{ padding: "16px 20px" }}>Network</th>
-              <th style={{ padding: "16px 20px" }}>Last Scanned</th>
-              <th style={{ padding: "16px 20px" }}></th>
-            </tr>
-          </thead>
-          <tbody onMouseLeave={() => setHoveredId(null)}>
-            {loading ? (
-              <tr><td colSpan={5} style={{ padding: 20, textAlign: "center" }}>Loading...</td></tr>
-            ) : watchlist.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 40, textAlign: "center", color: "var(--text-3)" }}>Your watchlist is empty.</td></tr>
-            ) : (
-              watchlist.map(item => (
-                <React.Fragment key={item.id}>
-                  <tr 
-                    onMouseEnter={() => setHoveredId(item.id)}
-                    style={{ borderBottom: hoveredId === item.id ? "none" : "1px solid var(--border)", cursor: "pointer", transition: "background 0.2s" }}
-                  >
-                    <td style={{ padding: "16px 20px", fontWeight: "bold" }}>{item.label || "—"}</td>
-                    <td style={{ padding: "16px 20px", fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: "var(--text-3)" }}>
-                      {item.address.substring(0, 8)}...{item.address.slice(-4)}
-                    </td>
-                    <td style={{ padding: "16px 20px" }}>
-                      <span style={{ background: "rgba(255,255,255,0.1)", padding: "4px 8px", borderRadius: 4, fontSize: 12 }}>
-                        {item.network.toUpperCase()}
-                      </span>
-                    </td>
-                    <td style={{ padding: "16px 20px", color: "var(--text-3)", fontSize: 14 }}>
-                      {item.last_scanned ? new Date(item.last_scanned).toLocaleDateString() : "Never"}
-                    </td>
-                    <td style={{ padding: "16px 20px", textAlign: "right" }}>
-                      <button onClick={() => handleDelete(item.id)} className="btn btn-outline" style={{ padding: "6px 12px", fontSize: 12, color: "var(--red)", borderColor: "var(--red)" }}>
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                  
-                  {hoveredId === item.id && (
-                    <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid var(--border)" }}>
-                      <td colSpan={5} style={{ padding: "0 20px 20px 20px" }}>
-                        <div style={{ padding: "16px", background: "rgba(0,0,0,0.3)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: 12, color: "var(--text-3)", marginBottom: 4, fontFamily: "'JetBrains Mono', monospace" }}>LATEST SCAN RESULTS</div>
-                            {item.last_scan_summary ? (
-                              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                                <div style={{ fontSize: 14 }}>
-                                  Risk Level: <strong style={{ color: item.last_scan_summary.risk_level === 'Critical' ? 'var(--red)' : item.last_scan_summary.risk_level === 'High' ? '#FF6B1A' : item.last_scan_summary.risk_level === 'Medium' ? '#FFD700' : 'var(--green)' }}>{item.last_scan_summary.risk_level}</strong>
-                                </div>
-                                <div style={{ fontSize: 14 }}>
-                                  Score: <strong>{item.last_scan_summary.risk_score ? Math.round(item.last_scan_summary.risk_score) : '—'}/100</strong>
-                                </div>
-                                <div style={{ display: "flex", gap: 8, fontSize: 12, marginLeft: 16 }}>
-                                  <span style={{ background: "rgba(255, 68, 68, 0.1)", color: "var(--red)", padding: "2px 6px", borderRadius: 4 }}>{item.last_scan_summary.critical_vulns} Critical</span>
-                                  <span style={{ background: "rgba(255, 107, 26, 0.1)", color: "#FF6B1A", padding: "2px 6px", borderRadius: 4 }}>{item.last_scan_summary.high_vulns} High</span>
-                                </div>
-                                <Link to={`/report/${item.last_scan_summary.id}`} className="btn btn-outline" style={{ fontSize: 11, padding: "4px 8px", marginLeft: 16 }}>View Full Report</Link>
+          {error && <div className="notice notice-red" role="alert">{error}</div>}
+
+          <div className="card table-wrap" style={{ padding: 0 }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Contract</th>
+                  <th>Network</th>
+                  <th>Latest result</th>
+                  <th>Rescan</th>
+                  <th>Alerts</th>
+                  <th>Last scanned</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={7} className="empty-state">Loading…</td></tr>
+                ) : watchlist.length === 0 ? (
+                  <tr><td colSpan={7} className="empty-state">Your watchlist is empty.</td></tr>
+                ) : (
+                  watchlist.map((item) => {
+                    const s = item.last_scan_summary;
+                    return (
+                      <tr key={item.id}>
+                        <td>
+                          <div style={{ fontWeight: 700 }}>{item.label || "—"}</div>
+                          <div className="mono muted" style={{ fontSize: 12 }} title={item.address}>{shortAddress(item.address)}</div>
+                        </td>
+                        <td><span className="status-chip">{item.network}</span></td>
+                        <td style={{ fontSize: 13 }}>
+                          {s ? (
+                            <Link to={`/report/${s.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                              <strong style={{ color: RISK_COLORS[s.risk_level || ""] ?? "var(--text-2)" }}>
+                                {s.risk_level || "—"} {s.risk_score != null ? `(${Math.round(s.risk_score)})` : ""}
+                              </strong>
+                              <div className="mono" style={{ fontSize: 11 }}>
+                                <span style={{ color: "var(--red)" }}>{s.critical_vulns}C</span> ·{" "}
+                                <span style={{ color: "var(--orange)" }}>{s.high_vulns}H</span> · view →
                               </div>
-                            ) : (
-                              <div style={{ fontSize: 14, color: "var(--text-3)" }}>No scan history found for this contract.</div>
-                            )}
-                          </div>
-                          
-                          <button 
-                            onClick={() => handleRescan(item)} 
-                            disabled={rescanStatus[item.id] === "loading" || rescanStatus[item.id] === "success"}
-                            className="btn btn-primary" 
-                            style={{ 
-                              fontSize: 13, 
-                              padding: "8px 16px",
-                              background: rescanStatus[item.id] === "success" ? "rgba(0,255,136,0.2)" : undefined,
-                              color: rescanStatus[item.id] === "success" ? "var(--green)" : undefined,
-                              borderColor: rescanStatus[item.id] === "success" ? "var(--green)" : undefined,
-                            }}
+                            </Link>
+                          ) : (
+                            <span className="muted">No scans yet</span>
+                          )}
+                        </td>
+                        <td>
+                          <select
+                            className="form-select"
+                            style={{ padding: "6px 10px", fontSize: 12 }}
+                            value={item.rescan_frequency_days}
+                            disabled={busyId === item.id}
+                            onChange={(e) => update(item, { rescan_frequency_days: Number(e.target.value) })}
+                            aria-label="Rescan frequency"
                           >
-                            {rescanStatus[item.id] === "loading" ? "↻ Queuing..." : 
-                             rescanStatus[item.id] === "success" ? "✅ Queued!" : 
-                             rescanStatus[item.id] === "error" ? "✖ Failed" : "↻ Scan Again"}
+                            {FREQUENCIES.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                            {!FREQUENCIES.some((f) => f.value === item.rescan_frequency_days) && (
+                              <option value={item.rescan_frequency_days}>Every {item.rescan_frequency_days} days</option>
+                            )}
+                          </select>
+                        </td>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={item.alert_on_new_vuln}
+                            disabled={busyId === item.id}
+                            onChange={(e) => update(item, { alert_on_new_vuln: e.target.checked })}
+                            aria-label="Alert on changes"
+                            style={{ width: 18, height: 18, accentColor: "var(--yellow)" }}
+                          />
+                        </td>
+                        <td className="muted" style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+                          {item.last_scanned ? new Date(item.last_scanned).toLocaleDateString() : "Never"}
+                        </td>
+                        <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <button className="btn btn-primary btn-sm" disabled={busyId === item.id} onClick={() => handleRescan(item)}>
+                            ↻ Scan
+                          </button>{" "}
+                          <button className="btn btn-danger btn-sm" disabled={busyId === item.id} onClick={() => handleDelete(item)} aria-label="Remove from watchlist">
+                            ✕
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

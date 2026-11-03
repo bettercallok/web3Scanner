@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import axios from "axios";
+import { API, errorMessage } from "../api";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
+const MAX_CHARS = 2000;
 
 interface Message {
   role: "user" | "assistant";
@@ -35,8 +36,8 @@ export default function ReportChat({ jobId }: { jobId: string }) {
     try {
       const res = await axios.post(`${API}/api/scans/${jobId}/chat/`, { message: userMessage });
       setMessages(prev => [...prev, { role: "assistant", content: res.data.reply }]);
-    } catch (err: any) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Sorry, I couldn't process that request right now." }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { role: "assistant", content: errorMessage(err, "Sorry, I couldn't process that request right now.") }]);
     } finally {
       setLoading(false);
     }
@@ -47,10 +48,12 @@ export default function ReportChat({ jobId }: { jobId: string }) {
       {/* Floating Action Button */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={isOpen ? "Close AI chat" : "Open AI chat"}
+        aria-expanded={isOpen}
         style={{
           position: "fixed",
           bottom: 30,
-          right: isOpen ? 430 : 30,
+          right: isOpen ? "min(430px, calc(100vw - 80px))" : 30,
           width: 60,
           height: 60,
           borderRadius: "50%",
@@ -76,8 +79,8 @@ export default function ReportChat({ jobId }: { jobId: string }) {
       <div style={{
         position: "fixed",
         top: 0,
-        right: isOpen ? 0 : -450,
-        width: 400,
+        right: isOpen ? 0 : "-110vw",
+        width: "min(400px, 100vw)",
         height: "100vh",
         background: "#0a0a0c",
         borderLeft: "1px solid var(--border)",
@@ -101,8 +104,19 @@ export default function ReportChat({ jobId }: { jobId: string }) {
             <div style={{ fontWeight: "bold", color: "var(--text-1)", fontFamily: "'JetBrains Mono', monospace", fontSize: 14 }}>
               AI AUDITOR
             </div>
-            <div style={{ fontSize: 12, color: "var(--green)" }}>● Online</div>
+            <div style={{ fontSize: 12, color: "var(--text-3)" }}>Answers are AI-generated — verify before acting.</div>
           </div>
+          <button
+            type="button"
+            onClick={async () => {
+              await axios.delete(`${API}/api/scans/${jobId}/chat/`).catch(() => undefined);
+              setMessages(m => m.slice(0, 1));
+            }}
+            title="Clear conversation"
+            style={{ marginLeft: "auto", background: "none", border: "1px solid var(--border)", color: "var(--text-3)", borderRadius: 6, padding: "4px 10px", cursor: "pointer", fontSize: 12 }}
+          >
+            Clear
+          </button>
         </div>
 
         {/* Message List */}
@@ -152,7 +166,9 @@ export default function ReportChat({ jobId }: { jobId: string }) {
           <div style={{ display: "flex", gap: 10 }}>
             <input
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => setInput(e.target.value.slice(0, MAX_CHARS))}
+              maxLength={MAX_CHARS}
+              aria-label="Ask the AI auditor"
               placeholder="Ask about the vulnerabilities..."
               style={{
                 flex: 1,

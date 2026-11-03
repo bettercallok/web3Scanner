@@ -2,16 +2,113 @@
 Slither static analysis runner.
 Supports both single-file and multi-file (directory) Solidity projects.
 """
+import glob
+import json
+import logging
 import os
 import re
-import json
-import uuid
-import logging
 import subprocess
-import glob
-from django.conf import settings
+
+from scanner.security import scan_work_dir, solc_env, validate_solc_version
 
 logger = logging.getLogger(__name__)
+
+MAX_GRAPH_NODES = 300
+
+_NODE_RE = re.compile(r'"([^"]+)"\s*\[label="([^"]+)"\]')
+_EDGE_RE = re.compile(r'"([^"]+)"\s*->\s*"([^"]+)"')
+
+
+def write_sources(work_dir: str, source_code: str, source_map: dict | None) -> str:
+    """
+    Write contract sources into ``work_dir``.
+
+    Returns the analysis target: the directory for multi-file projects, or the
+    single ``contract.sol`` file otherwise.
+    """
+    if source_map and len(source_map) > 1:
+        from .flattener import write_source_files
+
+        entry = write_source_files(source_map, work_dir)
+        logger.info(f"[slither] multi-file mode — {len(source_map)} files, entry: {os.path.basename(entry)}")
+        return work_dir
+
+    sol_file = os.path.join(work_dir, "contract.sol")
+    with open(sol_file, "w", encoding="utf-8") as fh:
+        fh.write(source_code or "")
+    return sol_file
+
+
+def ensure_solc(version: str) -> None:
+    """Install the requested solc (idempotent). Selection is done per-process via SOLC_VERSION."""
+    validate_solc_version(version)
+    try:
+        subprocess.run(["solc-select", "install", version], capture_output=True, timeout=120)
+    except Exception as exc:  # pragma: no cover - depends on host tooling
+        logger.warning(f"[slither] solc-select install {version} failed: {exc}")
+
+
+def parse_call_graph(work_dir: str, max_nodes: int = MAX_GRAPH_NODES) -> dict:
+    """Parse every ``*.dot`` file Slither's call-graph printer wrote into ``work_dir``."""
+    nodes: dict[str, dict] = {}
+    links: list[dict] = []
+
+    for dot_file in glob.glob(os.path.join(work_dir, "**", "*.dot"), recursive=True):
+        try:
+            with open(dot_file, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+        except OSError as exc:
+            logger.error(f"[graph] failed to read {os.path.basename(dot_file)}: {exc}")
+            continue
+        for m in _NODE_RE.finditer(content):
+            nodes.setdefault(m.group(1), {"id": m.group(1), "label": m.group(2), "group": 2})
+        for m in _EDGE_RE.finditer(content):
+            links.append({"source": m.group(1), "target": m.group(2)})
+
+    # Orphan endpoints become "external" nodes; drop duplicate edges.
+    seen = set()
+    unique_links = []
+    for link in links:
+        key = (link["source"], link["target"])
+        if key in seen:
+            continue
+        seen.add(key)
+        for end in key:
+            nodes.setdefault(end, {"id": end, "label": end, "group": 3})
+        unique_links.append(link)
+
+    node_list = list(nodes.values())
+    truncated = len(node_list) > max_nodes
+    if truncated:
+        node_list = node_list[:max_nodes]
+        allowed = {n["id"] for n in node_list}
+        unique_links = [l for l in unique_links if l["source"] in allowed and l["target"] in allowed]
+
+    graph = {"nodes": node_list, "links": unique_links}
+    if truncated:
+        graph["truncated"] = True
+    return graph
+
+
+def mark_vulnerable_nodes(graph: dict, vulnerabilities) -> dict:
+    """
+    Flag graph nodes whose label matches a function referenced by a finding
+    (Slither stores the function/contract name in ``code_snippet``).
+    """
+    names = {
+        (getattr(v, "code_snippet", "") or "").strip().lower()
+        for v in vulnerabilities
+        if not getattr(v, "is_false_positive", False)
+    }
+    names.discard("")
+    if not names:
+        return graph
+    for node in graph.get("nodes", []):
+        label = str(node.get("label", "")).lower()
+        fn = label.split(".")[-1].split("(")[0]
+        if fn in names or label in names:
+            node["vulnerable"] = True
+    return graph
 
 
 def run_slither(
@@ -23,65 +120,17 @@ def run_slither(
     """
     Run Slither on a Solidity source code string or multi-file project.
 
-    Args:
-        source_code:      Flat/concatenated source (used if source_map is None)
-        compiler_version: Semver string e.g. "0.8.20"
-        job_id:           UUID of the scan job (used for temp directory)
-        source_map:       Optional {filename: content} dict for multi-file projects
-
-    Returns:
-        Raw Slither JSON output dict.
+    Returns the raw Slither JSON output dict, with ``call_graph_data`` added.
     """
-    # ── Validate job_id ──────────────────────────────────────────
-    try:
-        uuid.UUID(str(job_id))
-    except ValueError:
-        raise ValueError(f"Invalid job_id: {job_id}")
+    validate_solc_version(compiler_version)
+    work_dir = scan_work_dir(job_id)
+    target = write_sources(work_dir, source_code, source_map)
+    ensure_solc(compiler_version)
 
-    work_dir = os.path.join(settings.SCAN_TMP_DIR, str(job_id))
-    work_dir = os.path.realpath(work_dir)
-    assert work_dir.startswith(
-        os.path.realpath(settings.SCAN_TMP_DIR)
-    ), "Path traversal detected"
-    os.makedirs(work_dir, exist_ok=True)
-
-    # ── Validate compiler version ────────────────────────────────
-    if not re.fullmatch(r"\d+\.\d+\.\d+", compiler_version):
-        raise ValueError(f"Invalid compiler version: {compiler_version!r}")
-
-    # ── Write source files ───────────────────────────────────────
-    if source_map and len(source_map) > 1:
-        # Multi-file project: write files preserving directory structure
-        from .flattener import write_source_files
-        entry_file = write_source_files(source_map, work_dir)
-        slither_target = work_dir   # run on the whole project directory
-        logger.info(f"[slither] multi-file mode — {len(source_map)} files, entry: {entry_file}")
-    else:
-        # Single file fallback
-        sol_file = os.path.join(work_dir, "contract.sol")
-        with open(sol_file, "w", encoding="utf-8") as fh:
-            fh.write(source_code)
-        slither_target = sol_file
-        logger.info(f"[slither] single-file mode — {sol_file}")
-
-    # ── Set solc version ─────────────────────────────────────────
-    try:
-        subprocess.run(
-            ["solc-select", "install", compiler_version],
-            capture_output=True, timeout=60,
-        )
-        subprocess.run(
-            ["solc-select", "use", compiler_version],
-            capture_output=True, timeout=10,
-        )
-    except Exception as exc:
-        logger.warning(f"[slither] solc-select failed: {exc}. Using default.")
-
-    # ── Run Slither ───────────────────────────────────────────────
     result = subprocess.run(
         [
             "slither",
-            slither_target,
+            target,
             "--json", "-",
             "--no-fail-pedantic",
             "--exclude-dependencies",
@@ -89,76 +138,33 @@ def run_slither(
         ],
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=180,
         cwd=work_dir,
+        env=solc_env(compiler_version),
     )
 
+    call_graph = parse_call_graph(work_dir)
     stdout = result.stdout.strip()
     if not stdout:
         return {
             "success": False,
-            "error":   result.stderr[:500],
+            "error": (result.stderr or "No output")[:500],
             "results": {"detectors": []},
+            "call_graph_data": call_graph,
         }
-
-    # ── Parse Call Graph (.dot) ──────────────────────────────────
-    call_graph = {"nodes": [], "links": []}
-    dot_files = glob.glob(os.path.join(work_dir, "*.dot"))
-    
-    node_pattern = re.compile(r'"([^"]+)"\s*\[label="([^"]+)"\]')
-    edge_pattern = re.compile(r'"([^"]+)"\s*->\s*"([^"]+)"')
-    
-    for dot_file in dot_files:
-        try:
-            with open(dot_file, "r") as f:
-                content = f.read()
-            for match in node_pattern.finditer(content):
-                call_graph["nodes"].append({
-                    "id": match.group(1),
-                    "label": match.group(2),
-                    "group": 2
-                })
-            for match in edge_pattern.finditer(content):
-                call_graph["links"].append({
-                    "source": match.group(1),
-                    "target": match.group(2)
-                })
-        except Exception as e:
-            logger.error(f"Failed to parse dot file {dot_file}: {e}")
-
-    # Deduplicate nodes just in case
-    unique_nodes = {n["id"]: n for n in call_graph["nodes"]}
-    
-    # Ensure all links point to valid nodes
-    valid_links = []
-    for link in call_graph["links"]:
-        if link["source"] not in unique_nodes:
-            unique_nodes[link["source"]] = {"id": link["source"], "label": link["source"], "group": 3}
-        if link["target"] not in unique_nodes:
-            unique_nodes[link["target"]] = {"id": link["target"], "label": link["target"], "group": 3}
-        valid_links.append(link)
-
-    call_graph["nodes"] = list(unique_nodes.values())
-    call_graph["links"] = valid_links
-
-    # Prevent massive graphs from crashing the browser (limit to 300 nodes)
-    if len(call_graph["nodes"]) > 300:
-        call_graph["nodes"] = call_graph["nodes"][:300]
-        allowed_ids = {n["id"] for n in call_graph["nodes"]}
-        call_graph["links"] = [l for l in call_graph["links"] if l["source"] in allowed_ids and l["target"] in allowed_ids]
 
     try:
         data = json.loads(stdout)
-        data["call_graph_data"] = call_graph
-        return data
     except json.JSONDecodeError:
         return {
             "success": False,
-            "error":   "JSON parse error",
-            "raw":     stdout[:500],
+            "error": "JSON parse error",
+            "raw": stdout[:500],
             "results": {"detectors": []},
-            "call_graph_data": call_graph
+            "call_graph_data": call_graph,
         }
+    data["call_graph_data"] = call_graph
+    return data
 
 
 def extract_call_graph(
@@ -170,88 +176,22 @@ def extract_call_graph(
     """
     Run Slither ONLY for the call-graph printer and return the parsed graph.
     Used to back-fill old scans that predate the call-graph feature.
-
-    Returns:
-        {"nodes": [...], "links": [...]}
     """
+    validate_solc_version(compiler_version)
+    work_dir = scan_work_dir(job_id, suffix="_graph")
     try:
-        uuid.UUID(str(job_id))
-    except ValueError:
-        raise ValueError(f"Invalid job_id: {job_id}")
+        target = write_sources(work_dir, source_code, source_map)
+        ensure_solc(compiler_version)
+        subprocess.run(
+            ["slither", target, "--print", "call-graph", "--no-fail-pedantic", "--exclude-dependencies"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd=work_dir,
+            env=solc_env(compiler_version),
+        )
+        return parse_call_graph(work_dir)
+    finally:
+        import shutil
 
-    if not re.fullmatch(r"\d+\.\d+\.\d+", compiler_version):
-        raise ValueError(f"Invalid compiler version: {compiler_version!r}")
-
-    work_dir = os.path.join(settings.SCAN_TMP_DIR, f"{job_id}_graph")
-    work_dir = os.path.realpath(work_dir)
-    assert work_dir.startswith(os.path.realpath(settings.SCAN_TMP_DIR)), "Path traversal"
-    os.makedirs(work_dir, exist_ok=True)
-
-    # Write source
-    if source_map and len(source_map) > 1:
-        from .flattener import write_source_files
-        write_source_files(source_map, work_dir)
-        slither_target = work_dir
-    else:
-        sol_file = os.path.join(work_dir, "contract.sol")
-        with open(sol_file, "w", encoding="utf-8") as fh:
-            fh.write(source_code or "")
-        slither_target = sol_file
-
-    # Set solc version
-    try:
-        subprocess.run(["solc-select", "install", compiler_version], capture_output=True, timeout=60)
-        subprocess.run(["solc-select", "use", compiler_version], capture_output=True, timeout=10)
-    except Exception as exc:
-        logger.warning(f"[graph] solc-select failed: {exc}")
-
-    # Run slither ONLY for the call-graph printer
-    subprocess.run(
-        ["slither", slither_target, "--print", "call-graph", "--no-fail-pedantic", "--exclude-dependencies"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        cwd=work_dir,
-    )
-
-    # Parse all .dot files
-    call_graph = {"nodes": [], "links": []}
-    dot_files = glob.glob(os.path.join(work_dir, "*.dot"))
-    node_pattern = re.compile(r'"([^"]+)"\s*\[label="([^"]+)"\]')
-    edge_pattern = re.compile(r'"([^"]+)"\s*->\s*"([^"]+)"')
-
-    for dot_file in dot_files:
-        try:
-            with open(dot_file, "r") as f:
-                content = f.read()
-            for m in node_pattern.finditer(content):
-                call_graph["nodes"].append({"id": m.group(1), "label": m.group(2), "group": 2})
-            for m in edge_pattern.finditer(content):
-                call_graph["links"].append({"source": m.group(1), "target": m.group(2)})
-        except Exception as e:
-            logger.error(f"Failed to parse {dot_file}: {e}")
-
-    # Deduplicate and fix orphan links
-    unique_nodes = {n["id"]: n for n in call_graph["nodes"]}
-    valid_links = []
-    for link in call_graph["links"]:
-        if link["source"] not in unique_nodes:
-            unique_nodes[link["source"]] = {"id": link["source"], "label": link["source"], "group": 3}
-        if link["target"] not in unique_nodes:
-            unique_nodes[link["target"]] = {"id": link["target"], "label": link["target"], "group": 3}
-        valid_links.append(link)
-
-    call_graph["nodes"] = list(unique_nodes.values())
-    call_graph["links"] = valid_links
-
-    # Hard cap at 300 nodes
-    if len(call_graph["nodes"]) > 300:
-        call_graph["nodes"] = call_graph["nodes"][:300]
-        allowed_ids = {n["id"] for n in call_graph["nodes"]}
-        call_graph["links"] = [
-            lnk for lnk in call_graph["links"]
-            if lnk["source"] in allowed_ids and lnk["target"] in allowed_ids
-        ]
-
-    return call_graph
-
+        shutil.rmtree(work_dir, ignore_errors=True)

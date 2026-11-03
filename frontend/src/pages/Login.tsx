@@ -2,13 +2,13 @@ import React, { useState } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { API } from "../api";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -18,12 +18,20 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setSubmitting(true);
     try {
       const res = await axios.post(`${API}/api/accounts/login/`, { username, password });
       login(res.data.access, res.data.refresh);
       navigate("/dashboard");
     } catch (err: any) {
-      setError("Invalid credentials. Please try again.");
+      setError(
+        err?.response?.status === 429
+          ? "Too many login attempts. Please wait a minute and try again."
+          : "Invalid credentials. Please try again."
+      );
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -62,7 +70,7 @@ export default function Login() {
         <div style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", padding: "20px" }}>
           <div className="card" style={{ width: "100%", maxWidth: 400, padding: 32, background: "rgba(18, 18, 20, 0.8)", border: "1px solid rgba(255,255,255,0.1)", boxShadow: "0 24px 48px rgba(0,0,0,0.5)" }}>
             <h2 style={{ marginBottom: 24, textAlign: "center", fontFamily: "'JetBrains Mono', monospace" }}>LOGIN</h2>
-            {error && <div style={{ color: "var(--red)", marginBottom: 16, fontSize: 14 }}>{error}</div>}
+            {error && <div role="alert" style={{ color: "var(--red)", marginBottom: 16, fontSize: 14 }}>{error}</div>}
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ display: "block", marginBottom: 8, fontSize: 14, color: "var(--text-2)" }}>Username</label>
@@ -72,6 +80,7 @@ export default function Login() {
                   style={{ width: "100%" }}
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
+                  autoComplete="username"
                   required
                 />
               </div>
@@ -83,11 +92,12 @@ export default function Login() {
                   style={{ width: "100%" }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
                   required
                 />
               </div>
-              <button type="submit" className="btn btn-primary" style={{ marginTop: 16, width: "100%" }}>
-                Sign In
+              <button type="submit" className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} disabled={submitting}>
+                {submitting ? "Signing in…" : "Sign In"}
               </button>
             </form>
             <p style={{ marginTop: 24, textAlign: "center", fontSize: 14, color: "var(--text-3)" }}>

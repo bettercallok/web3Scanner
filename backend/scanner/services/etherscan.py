@@ -9,6 +9,10 @@ from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
+class EtherscanError(Exception):
+    """Etherscan lookup failed. The message is safe to show to end users."""
+
+
 ETHERSCAN_CHAIN_IDS = {
     "mainnet":  "1",
     "polygon":  "137",
@@ -45,12 +49,25 @@ def fetch_contract_source(address: str, network: str = "mainnet") -> dict:
         "apikey":  api_key,
     }
 
-    resp = requests.get(base_url, params=params, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
+    # NOTE: never let a requests exception propagate verbatim — its message contains
+    # the full request URL including ``apikey=...``, and task errors are shown to users.
+    try:
+        resp = requests.get(base_url, params=params, timeout=30)
+    except requests.Timeout:
+        raise EtherscanError("Etherscan request timed out.") from None
+    except requests.RequestException as exc:
+        raise EtherscanError(f"Could not reach Etherscan ({exc.__class__.__name__}).") from None
 
-    if data.get("status") != "1" or not data.get("result"):
-        raise ValueError(f"Etherscan error: {data.get('message', 'Unknown error')}")
+    if resp.status_code != 200:
+        raise EtherscanError(f"Etherscan returned HTTP {resp.status_code}.")
+    try:
+        data = resp.json()
+    except ValueError:
+        raise EtherscanError("Etherscan returned an invalid response.") from None
+
+    if data.get("status") != "1" or not data.get("result") or not isinstance(data["result"], list):
+        detail = data.get("result") if isinstance(data.get("result"), str) else data.get("message", "Unknown error")
+        raise EtherscanError(f"Etherscan error: {str(detail)[:200]}")
 
     result          = data["result"][0]
     raw_source      = result.get("SourceCode", "")

@@ -1,67 +1,91 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import axios from "axios";
+import {
+  API,
+  REFRESH_KEY,
+  getAccessToken,
+  installAuthInterceptor,
+  setAuthFailureHandler,
+  storeTokens,
+} from "../api";
 
-const API = import.meta.env.VITE_API_BASE_URL || "";
-
-interface User {
+export interface User {
   id: number;
   username: string;
   email: string;
+  date_joined?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (token: string, refresh: string) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
+installAuthInterceptor();
+// Apply a stored token before the first render so early requests are authenticated.
+const initialToken = getAccessToken();
+if (initialToken) storeTokens(initialToken);
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem("access_token"));
+  const [token, setToken] = useState<string | null>(initialToken);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-      fetchProfile();
-    } else {
-      delete axios.defaults.headers.common["Authorization"];
-      setIsLoading(false);
-    }
-  }, [token]);
+  const clearSession = useCallback(() => {
+    storeTokens(null, null);
+    setToken(null);
+    setUser(null);
+  }, []);
 
-  const fetchProfile = async () => {
+  useEffect(() => {
+    setAuthFailureHandler(clearSession);
+  }, [clearSession]);
+
+  const refreshProfile = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/api/accounts/profile/`);
       setUser(res.data);
-    } catch (err) {
-      console.error("Failed to fetch profile", err);
-      // Could attempt refresh here, but for simplicity we'll just log out
-      logout();
-    } finally {
+    } catch {
+      clearSession();
+    }
+  }, [clearSession]);
+
+  useEffect(() => {
+    if (token) {
+      refreshProfile().finally(() => setIsLoading(false));
+    } else {
       setIsLoading(false);
     }
-  };
+  }, [token, refreshProfile]);
 
   const login = (accessToken: string, refreshToken: string) => {
-    localStorage.setItem("access_token", accessToken);
-    localStorage.setItem("refresh_token", refreshToken);
+    storeTokens(accessToken, refreshToken);
+    setIsLoading(true);
     setToken(accessToken);
   };
 
-  const logout = () => {
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    setToken(null);
-    setUser(null);
+  const logout = async () => {
+    let refresh: string | null = null;
+    try {
+      refresh = localStorage.getItem(REFRESH_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (refresh) {
+      // Revoke server-side so a stolen refresh token stops working.
+      await axios.post(`${API}/api/accounts/logout/`, { refresh }).catch(() => undefined);
+    }
+    clearSession();
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, token, login, logout, refreshProfile, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

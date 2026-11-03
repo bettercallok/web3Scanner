@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import ForceGraph2D from "react-force-graph-2d";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { API } from "../api";
 
 interface GraphNode {
   id: string;
@@ -19,7 +18,7 @@ interface GraphLink {
 }
 
 export default function VulnGraph({ jobId }: { jobId: string }) {
-  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({ nodes: [], links: [] });
+  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[]; truncated?: boolean }>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -123,6 +122,7 @@ export default function VulnGraph({ jobId }: { jobId: string }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <span style={{ fontSize: 12, color: "var(--text-3)" }}>
           {data.nodes.length} nodes · {data.links.length} edges
+          {data.truncated && " · truncated to the first 300 nodes"}
         </span>
         <button
           onClick={() => graphRef.current?.zoomToFit(400)}

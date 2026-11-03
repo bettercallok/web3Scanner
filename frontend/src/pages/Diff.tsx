@@ -1,8 +1,8 @@
-import React, { useState, FormEvent } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useState, FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import axios from "axios";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { API, errorMessage } from "../api";
+import Navbar from "../components/Navbar";
 
 // ─── Types ────────────────────────────────────────────────────
 interface DiffVuln {
@@ -115,32 +115,44 @@ function DiffVulnCard({
 
 // ─── Main Page ────────────────────────────────────────────────
 export default function Diff() {
-  const [jobA, setJobA] = useState("");
-  const [jobB, setJobB] = useState("");
+  const [params, setParams] = useSearchParams();
+  const [jobA, setJobA] = useState(params.get("a") || "");
+  const [jobB, setJobB] = useState(params.get("b") || "");
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
   const [result, setResult]   = useState<DiffResult | null>(null);
   const [activeTab, setActiveTab] = useState<"new" | "fixed" | "unchanged">("new");
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const runDiff = useCallback(async (a: string, b: string) => {
     setError("");
     setResult(null);
-
-    if (!jobA.trim() || !jobB.trim()) {
+    if (!a.trim() || !b.trim()) {
       setError("Enter both Scan IDs.");
       return;
     }
-
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/api/diff/`, { job_a: jobA.trim(), job_b: jobB.trim() });
+      const res = await axios.post(`${API}/api/diff/`, { job_a: a.trim(), job_b: b.trim() });
       setResult(res.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || "Diff failed.");
+      setParams({ a: a.trim(), b: b.trim() }, { replace: true });
+    } catch (err) {
+      setError(errorMessage(err, "Diff failed."));
     } finally {
       setLoading(false);
     }
+  }, [setParams]);
+
+  // Deep links from the dashboard / report (?a=<id>&b=<id>) run immediately.
+  useEffect(() => {
+    const a = params.get("a");
+    const b = params.get("b");
+    if (a && b) runDiff(a, b);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    runDiff(jobA, jobB);
   };
 
   const riskColor = (delta: number) =>
@@ -154,14 +166,7 @@ export default function Diff() {
 
   return (
     <>
-      {/* Navbar */}
-      <nav className="navbar">
-        <Link to="/" className="navbar-logo">
-
-          WEB3<span className="logo-dot">.</span>SCANNER
-        </Link>
-        <span className="nav-badge">DIFF</span>
-      </nav>
+      <Navbar badge="DIFF" />
 
       <div className="scan-page">
         <div className="container">
