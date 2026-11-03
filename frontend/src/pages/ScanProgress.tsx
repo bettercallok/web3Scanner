@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API, errorMessage, scanSocketUrl } from "../api";
-import Navbar from "../components/Navbar";
+import Icon from "../components/Icon";
 
 interface PipelineStep {
   id: string;
@@ -26,14 +26,14 @@ interface ScanJob {
 }
 
 const PIPELINE_STEPS: PipelineStep[] = [
-  { id: "fetch",    label: "Fetching Source",       sub: "Retrieving verified code from Etherscan" },
-  { id: "slither",  label: "Slither Analysis",       sub: "Running 90+ static detectors" },
-  { id: "mythril",  label: "Mythril Symbolic Exec",  sub: "Exploring all execution paths (may take a while)" },
-  { id: "gas",      label: "Gas Optimization",       sub: "Finding costly loops & storage patterns" },
-  { id: "honeypot", label: "Honeypot Detection",     sub: "Transfer simulation + ABI red flags" },
-  { id: "ai",       label: "AI Semantic Review",     sub: "LLM reasoning over business logic" },
-  { id: "scoring",  label: "Risk Scoring",           sub: "Calculating weighted vulnerability score" },
-  { id: "report",   label: "Generating Report",      sub: "Creating PDF audit report" },
+  { id: "fetch",    label: "Fetching source",       sub: "Verified source, proxy implementation or bytecode" },
+  { id: "slither",  label: "Static analysis",       sub: "Slither — 90+ detectors" },
+  { id: "mythril",  label: "Symbolic execution",  sub: "Mythril explores execution paths — the slowest step" },
+  { id: "gas",      label: "Gas optimisation",       sub: "Costly loops and storage patterns" },
+  { id: "honeypot", label: "Honeypot detection",     sub: "Transfer simulation and ABI red flags" },
+  { id: "ai",       label: "AI review",     sub: "Local LLM triages and explains findings" },
+  { id: "scoring",  label: "Risk scoring",           sub: "Weighted 0–100 score" },
+  { id: "report",   label: "Report",      sub: "PDF, SARIF and JSON exports" },
 ];
 
 function getStepFromProgress(progress: number): number {
@@ -52,7 +52,7 @@ export default function ScanProgress() {
   const navigate = useNavigate();
   const [job, setJob] = useState<ScanJob | null>(null);
   const [progress, setProgress] = useState<number>(0);
-  const [logs, setLogs] = useState<(string | LogEntry)[]>(["🚀 Scan started..."]);
+  const [logs, setLogs] = useState<(string | LogEntry)[]>(["Scan queued — waiting for a worker…"]);
   const [error, setError] = useState<string>("");
   const wsRef = useRef<WebSocket | null>(null);
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -136,15 +136,15 @@ export default function ScanProgress() {
 
   return (
     <>
-      <Navbar badge={error ? "FAILED" : "SCANNING"} />
-
       <div className="scan-page">
         <div className="container">
-          <h1 className="page-heading">
-            <span className="accent-red">SCAN</span>{" "}
-            <span className="accent-blue">IN</span>{" "}
-            <span className="accent-yellow">PROGRESS</span>
-          </h1>
+          <div className="breadcrumb">
+            <Link to="/dashboard">Scans</Link> <span>/</span> <span>{job?.contract_name || "New scan"}</span>
+          </div>
+          <div className="page-header" style={{ marginBottom: 0 }}>
+            <h1 className="page-title">{error ? "Scan failed" : progress >= 100 ? "Scan complete" : "Scanning contract"}</h1>
+            {!error && progress < 100 && <span className="status-chip status-active">Live</span>}
+          </div>
           <div className="address-display">
             {job?.contract_name ? `${job.contract_name} · ` : ""}
             {job?.address ?? id}
@@ -153,12 +153,13 @@ export default function ScanProgress() {
 
           {error && (
             <div className="card error-card">
-              <div style={{ color: "var(--red)", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace", fontSize: "14px" }}>
-                ✖ {error}
+              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", color: "var(--sev-critical)" }}>
+                <Icon name="alert" size={18} />
+                <div style={{ color: "var(--text-1)" }}>{error}</div>
               </div>
-              <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-                <a href="/" className="btn btn-secondary btn-sm">← New scan</a>
-                <a href="/dashboard" className="btn btn-outline btn-sm">Dashboard</a>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <Link to="/" className="btn btn-primary btn-sm">Try another address</Link>
+                <Link to="/dashboard" className="btn btn-outline btn-sm">Back to scans</Link>
               </div>
             </div>
           )}
@@ -168,8 +169,8 @@ export default function ScanProgress() {
             <div className="progress-header">
               <span className="progress-label">
                 {progress >= 100
-                  ? "✔ COMPLETE!"
-                  : PIPELINE_STEPS[Math.min(activeStep, PIPELINE_STEPS.length - 1)].label.toUpperCase()}
+                  ? "Complete — opening report…"
+                  : PIPELINE_STEPS[Math.min(activeStep, PIPELINE_STEPS.length - 1)].label}
               </span>
               <span className="progress-pct">{progress}%</span>
             </div>
@@ -191,18 +192,12 @@ export default function ScanProgress() {
                         isDone ? "step-done" : isActive ? "step-active" : "step-pending"
                       }`}
                     >
-                      {isDone ? "✓" : isActive ? "⟳" : i + 1}
+                      {isDone ? <Icon name="check" size={14} /> : isActive ? <span className="btn-spinner" style={{ borderColor: "var(--accent-ring)", borderTopColor: "var(--accent-text)", width: 12, height: 12 }} /> : i + 1}
                     </div>
                     <div>
                       <div
                         className="step-name"
-                        style={{
-                          color: isDone
-                            ? "var(--green)"
-                            : isActive
-                            ? "var(--yellow)"
-                            : "var(--text-3)",
-                        }}
+                        style={{ color: isDone || isActive ? "var(--text-1)" : "var(--text-3)" }}
                       >
                         {step.label}
                       </div>

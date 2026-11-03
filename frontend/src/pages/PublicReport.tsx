@@ -2,12 +2,13 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import axios from "axios";
 import { API, downloadFile, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
+import { Brand } from "../components/AppShell";
+import Icon from "../components/Icon";
 import RiskGauge from "../components/RiskGauge";
 import VulnCard from "../components/VulnCard";
 import VulnGraph from "../components/VulnGraph";
-import { GasList, ReportBanners } from "./Report";
-import { ScanJob, SEV_LABELS, SEV_ORDER, Severity } from "../types";
+import { GasList, ReportBanners, SeveritySummary } from "./Report";
+import { NETWORKS, ScanJob, SEV_LABELS, SEV_ORDER, Severity } from "../types";
 
 type View = "all" | Severity | "gas" | "graph";
 
@@ -27,20 +28,29 @@ export default function PublicReport() {
       .finally(() => setLoading(false));
   }, [slug]);
 
+  const bar = (
+    <header className="public-bar">
+      <Brand sub={job?.share_label ? `Shared by ${job.share_label}` : "Public report"} />
+      <Link to="/" className="btn btn-secondary btn-sm">Scan your own contract</Link>
+    </header>
+  );
+
   if (loading)
     return (
       <div className="loading-center">
         <div className="spinner" />
-        <p className="loading-text">// loading report...</p>
+        <p className="loading-text">Loading report…</p>
       </div>
     );
   if (error || !job)
     return (
-      <div className="error-state">
-        <div className="error-icon">✖</div>
-        <div className="error-msg">{error}</div>
-        <Link to="/" className="btn btn-primary" style={{ marginTop: 24 }}>Scan your own contract →</Link>
-      </div>
+      <>
+        {bar}
+        <div className="error-state">
+          <div className="error-icon">!</div>
+          <div className="error-msg">{error}</div>
+        </div>
+      </>
     );
 
   const vulns = (job.vulnerabilities ?? []).filter((v) => !v.is_false_positive);
@@ -65,80 +75,71 @@ export default function PublicReport() {
 
   return (
     <>
-      <Navbar brand={job.share_label || undefined} badge="PUBLIC REPORT" />
-
+      {bar}
       <div className="report-page">
         <div className="container">
-          <div className="report-header">
-            <div className="report-title-row">
-              <h1 className="report-title">{job.contract_name || "AUDIT REPORT"}</h1>
-              {job.is_honeypot === true && <span className="honeypot-badge">⚠ HONEYPOT</span>}
-              {job.is_honeypot === false && <span className="safe-badge">✔ NOT HONEYPOT</span>}
+          <div className="page-header report-header">
+            <div style={{ minWidth: 0 }}>
+              <div className="report-title-row">
+                <h1 className="report-title">{job.contract_name || "Untitled contract"}</h1>
+                {job.is_honeypot === true && <span className="honeypot-badge"><Icon name="alert" size={13} /> Honeypot</span>}
+                {job.is_honeypot === false && <span className="safe-badge"><Icon name="check" size={13} /> Not a honeypot</span>}
+              </div>
+              <div className="report-meta">
+                <span className="mono">{job.address}</span>
+                <span>{NETWORKS.find((n) => n.value === job.network)?.label ?? job.network}</span>
+                {job.created_at && <span>Scanned {new Date(job.created_at).toLocaleDateString()}</span>}
+              </div>
             </div>
-            <div className="mono muted" style={{ fontSize: "12px", marginBottom: 16, wordBreak: "break-all" }}>
-              {job.address} · {job.network}
-              {job.created_at && ` · scanned ${new Date(job.created_at).toLocaleDateString()}`}
+            <div className="report-actions">
+              <button className="btn btn-primary" onClick={() => doExport("pdf")}><Icon name="download" size={15} /> PDF</button>
+              <button className="btn btn-outline" onClick={() => doExport("sarif")}>SARIF</button>
             </div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              <button className="btn btn-outline btn-sm" onClick={() => doExport("pdf")}>↓ PDF</button>
-              <button className="btn btn-outline btn-sm" onClick={() => doExport("sarif")}>↓ SARIF</button>
-            </div>
-            {exportError && <div className="error-text" style={{ marginTop: 10 }}>{exportError}</div>}
           </div>
+          {exportError && <div className="notice notice-red" role="alert"><div>{exportError}</div></div>}
 
           <ReportBanners job={job} />
 
-          <div className="card" style={{ marginBottom: "28px" }}>
-            <div className="score-section">
-              <RiskGauge score={job.risk_score} level={job.risk_level} />
-              <div className="ai-summary">
-                <h3>// AI ANALYSIS SUMMARY</h3>
-                <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", lineHeight: 1.6 }}>
-                  {job.ai_summary || "AI analysis was not available for this scan."}
-                </p>
-              </div>
+          <div className="card score-section" style={{ marginBottom: 20 }}>
+            <RiskGauge score={job.risk_score} level={job.risk_level} />
+            <div className="ai-summary">
+              <h3><Icon name="sparkles" size={15} /> AI summary</h3>
+              <p style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{job.ai_summary || "AI analysis was not available for this scan."}</p>
             </div>
           </div>
 
+          <SeveritySummary counts={counts} view={view} setView={setView} />
+
           <div className="filter-bar">
-            {(["all", ...SEV_ORDER] as const).map((f) => (
-              <button key={f} className={`filter-btn ${view === f ? "active" : ""}`} onClick={() => setView(f)}>
-                {f === "all" ? `All Findings (${vulns.length})` : `${SEV_LABELS[f]} (${counts[f]})`}
-              </button>
-            ))}
+            <button className={`filter-btn ${view !== "gas" && view !== "graph" ? "active" : ""}`} onClick={() => setView("all")}>
+              Findings <span className="filter-count">{vulns.length}</span>
+            </button>
             {gasIssues.length > 0 && (
               <button className={`filter-btn ${view === "gas" ? "active" : ""}`} onClick={() => setView("gas")}>
-                ⛽ Gas ({gasIssues.length})
+                Gas <span className="filter-count">{gasIssues.length}</span>
               </button>
             )}
-            <button className={`filter-btn ${view === "graph" ? "active" : ""}`} onClick={() => setView("graph")}>
-              ◎ Call Graph
-            </button>
+            <button className={`filter-btn ${view === "graph" ? "active" : ""}`} onClick={() => setView("graph")}>Call graph</button>
           </div>
 
           {view === "graph" ? (
-            <div className="card" style={{ padding: 24, marginBottom: 28 }}>
-              <h3 style={{ marginBottom: 16 }}>// CALL GRAPH</h3>
-              <VulnGraph jobId={job.id} />
-            </div>
+            <div className="card"><VulnGraph jobId={job.id} /></div>
           ) : view === "gas" ? (
             <GasList job={job} />
           ) : filtered.length === 0 ? (
-            <div className="card" style={{ textAlign: "center", padding: "56px" }}>
-              <p className="mono muted" style={{ fontSize: "13px" }}>// no vulnerabilities in this category</p>
+            <div className="card empty-state">
+              <div className="empty-icon"><Icon name="shieldCheck" size={20} /></div>
+              <h3>{view === "all" ? "No vulnerabilities detected" : `No ${SEV_LABELS[view]?.toLowerCase()} findings`}</h3>
             </div>
           ) : (
-            filtered.map((v) => <VulnCard key={v.id} vuln={v} />)
+            <div className="findings">{filtered.map((v) => <VulnCard key={v.id} vuln={v} />)}</div>
           )}
+
+          <p className="muted" style={{ fontSize: 12, marginTop: 24 }}>
+            Shared via Web3 Scanner. Automated analysis is informational and not a substitute for a manual audit.
+          </p>
         </div>
       </div>
-
-      <footer className="footer">
-        <p>
-          Shared via <Link to="/" style={{ color: "var(--text-2)" }}><strong>Web3 Security Scanner</strong></Link> — automated analysis,
-          not a substitute for a manual audit.
-        </p>
-      </footer>
     </>
   );
 }

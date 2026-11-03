@@ -10,10 +10,10 @@ export const SEV_LABELS: Record<string, string> = {
 };
 
 export const RISK_COLORS: Record<string, string> = {
-  Critical: "var(--red)",
-  High: "var(--orange)",
-  Medium: "var(--yellow)",
-  Low: "var(--green)",
+  Critical: "var(--sev-critical)",
+  High: "var(--sev-high)",
+  Medium: "var(--sev-medium)",
+  Low: "var(--sev-low)",
 };
 
 /** Networks the backend can analyse today (must match SUPPORTED_NETWORKS server-side). */

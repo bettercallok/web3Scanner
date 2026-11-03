@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API, errorMessage } from "../api";
-import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 
 interface NotificationSettings {
@@ -31,7 +30,7 @@ function NotificationsCard() {
     axios.get(`${API}/api/notifications/settings/`).then((r) => setS(r.data)).catch((e) => setErr(errorMessage(e)));
   }, []);
 
-  if (!s) return <div className="card" style={{ padding: 24 }}>{err ? <Status ok="" err={err} /> : <span className="muted">Loading…</span>}</div>;
+  if (!s) return <div className="card">{err ? <Status ok="" err={err} /> : <span className="muted">Loading…</span>}</div>;
 
   const set = <K extends keyof NotificationSettings>(k: K, v: NotificationSettings[K]) => setS({ ...s, [k]: v });
 
@@ -69,9 +68,9 @@ function NotificationsCard() {
   };
 
   return (
-    <form className="card" style={{ padding: 24 }} onSubmit={save}>
-      <h3 style={{ marginBottom: 4 }}>🔔 Alerts</h3>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
+    <form className="card" onSubmit={save}>
+      <div className="card-title">Alerts</div>
+      <p className="card-sub" style={{ marginBottom: 8 }}>
         Sent when a scan finishes at or above the chosen risk level, and when a watched contract is upgraded.
       </p>
 
@@ -80,15 +79,15 @@ function NotificationsCard() {
         <input type="checkbox" checked={s.email_enabled} onChange={(e) => set("email_enabled", e.target.checked)} />
       </div>
       <div className="switch-row">
-        <span>Alert on <strong style={{ color: "var(--red)" }}>Critical</strong> risk</span>
+        <span>Critical-risk scans <span className="sev-label label-critical" style={{ marginLeft: 6 }}>critical</span></span>
         <input type="checkbox" checked={s.alert_on_critical} onChange={(e) => set("alert_on_critical", e.target.checked)} />
       </div>
       <div className="switch-row">
-        <span>Alert on <strong style={{ color: "var(--orange)" }}>High</strong> risk</span>
+        <span>High-risk scans <span className="sev-label label-high" style={{ marginLeft: 6 }}>high</span></span>
         <input type="checkbox" checked={s.alert_on_high} onChange={(e) => set("alert_on_high", e.target.checked)} />
       </div>
       <div className="switch-row">
-        <span>Alert on <strong style={{ color: "var(--yellow)" }}>Medium</strong> risk</span>
+        <span>Medium-risk scans <span className="sev-label label-medium" style={{ marginLeft: 6 }}>medium</span></span>
         <input type="checkbox" checked={s.alert_on_medium} onChange={(e) => set("alert_on_medium", e.target.checked)} />
       </div>
 
@@ -150,9 +149,9 @@ function AccountCard() {
   };
 
   return (
-    <div className="card" style={{ padding: 24 }}>
-      <h3 style={{ marginBottom: 4 }}>👤 Account</h3>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 16 }}>
+    <div className="card">
+      <div className="card-title">Account</div>
+      <p className="card-sub" style={{ marginBottom: 16 }}>
         Signed in as <strong>{user?.username}</strong>
         {user?.date_joined && ` · member since ${new Date(user.date_joined).toLocaleDateString()}`}
       </p>
@@ -186,11 +185,13 @@ function AccountCard() {
 export default function Settings() {
   return (
     <>
-      <Navbar />
       <div className="page">
         <div className="container" style={{ maxWidth: 760 }}>
           <div className="page-header">
-            <h1 className="page-title">SETTINGS</h1>
+            <div>
+              <h1 className="page-title">Settings</h1>
+              <p className="page-subtitle">Notification channels and account details.</p>
+            </div>
           </div>
           <div className="form-grid" style={{ gap: 24 }}>
             <NotificationsCard />
