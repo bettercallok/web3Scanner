@@ -1,73 +1,95 @@
-import React, { useState, FormEvent, ChangeEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useRef, useState, FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { API, errorMessage } from "../api";
 import Navbar from "../components/Navbar";
-import { EVM_ADDRESS, NETWORKS } from "../types";
+import Icon, { IconName } from "../components/Icon";
+import { EVM_ADDRESS, NETWORKS, RISK_COLORS, ScanListItem, shortAddress } from "../types";
 
-interface Feature {
-  icon: string;
-  name: string;
-  desc: string;
-  colorClass: string;
-}
+const EXAMPLES = [
+  { label: "USDC", address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", network: "mainnet", hint: "proxy" },
+  { label: "WETH", address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", network: "mainnet", hint: "token" },
+  { label: "Uniswap V2 Router", address: "0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D", network: "mainnet", hint: "DeFi" },
+];
 
-const FEATURES: Feature[] = [
+const PIPELINE: { title: string; desc: string }[] = [
+  { title: "Fetch", desc: "Verified source, proxy implementation or raw bytecode" },
+  { title: "Static", desc: "Slither detectors + gas optimisation pass" },
+  { title: "Symbolic", desc: "Mythril explores execution paths with Z3" },
+  { title: "AI review", desc: "Local LLM triages findings with SWC context" },
+  { title: "Score & report", desc: "0–100 risk score, PDF / SARIF / JSON" },
+];
+
+const FEATURES: { icon: IconName; name: string; desc: string; tone: string }[] = [
   {
-    icon: "🔍",
-    name: "Static Analysis",
-    desc: "Slither scans your contract's AST with 90+ detectors, catching reentrancy, integer overflows, tx.origin misuse, and more in seconds.",
-    colorClass: "icon-red",
+    icon: "search",
+    name: "Static analysis",
+    desc: "Slither's 90+ detectors catch reentrancy, unchecked calls, tx.origin auth and access-control gaps in seconds.",
+    tone: "tone-red",
   },
   {
-    icon: "⚙️",
-    name: "Symbolic Execution",
-    desc: "Mythril mathematically explores every execution path using SMT solvers to prove whether vulnerabilities are truly exploitable.",
-    colorClass: "icon-blue",
+    icon: "branches",
+    name: "Symbolic execution",
+    desc: "Mythril walks execution paths with an SMT solver — even on unverified contracts, straight from bytecode.",
+    tone: "tone-blue",
   },
   {
-    icon: "🤖",
-    name: "AI Semantic Review",
-    desc: "Local LLM (no API key needed) reasons over your full codebase, filters false positives, and explains risks in plain English.",
-    colorClass: "icon-yellow",
+    icon: "sparkles",
+    name: "AI semantic review",
+    desc: "A locally hosted LLM filters false positives and explains each risk in plain English. Your code never leaves the server.",
+    tone: "tone-yellow",
   },
   {
-    icon: "🍯",
-    name: "Honeypot Detection",
-    desc: "Our simulation engine executes buy+sell sequences against a mainnet fork to detect hidden sell restrictions and rug-pull mechanisms.",
-    colorClass: "icon-red",
+    icon: "shieldAlert",
+    name: "Honeypot detection",
+    desc: "Transfer simulation plus ABI red flags — blacklists, trading switches, adjustable sell taxes.",
+    tone: "tone-red",
   },
   {
-    icon: "📊",
-    name: "Risk Scoring",
-    desc: "Every finding is weighted by SWC impact, exploitability, and AI confidence into a 0–100 risk score with actionable thresholds.",
-    colorClass: "icon-blue",
+    icon: "eye",
+    name: "Upgrade monitoring",
+    desc: "Watch contracts: bytecode and proxy-implementation changes trigger an alert and an automatic rescan.",
+    tone: "tone-blue",
   },
   {
-    icon: "📄",
-    name: "PDF Reports",
-    desc: "Beautifully formatted audit reports with executive summaries, code snippets, and remediation steps — ready for stakeholders.",
-    colorClass: "icon-yellow",
+    icon: "download",
+    name: "Shareable reports",
+    desc: "Branded PDF, SARIF for GitHub Code Scanning, JSON, and read-only public links.",
+    tone: "tone-yellow",
   },
 ];
+
+function riskTone(level?: string | null) {
+  return RISK_COLORS[level || ""] ?? "var(--text-3)";
+}
 
 export default function Home() {
   const [address, setAddress] = useState<string>("");
   const [network, setNetwork] = useState<string>("mainnet");
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
+  const [recent, setRecent] = useState<ScanListItem[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    axios
+      .get(`${API}/api/scans/?limit=4`)
+      .then((res) => setRecent(res.data.results || res.data))
+      .catch(() => undefined);
+  }, []);
+
+  const trimmed = address.trim();
+  const looksValid = EVM_ADDRESS.test(trimmed);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
-
-    const trimmed = address.trim();
-    if (!EVM_ADDRESS.test(trimmed)) {
-      setError("Please enter a valid contract address (0x + 40 hex chars).");
+    if (!looksValid) {
+      setError("Enter a contract address: 0x followed by 40 hex characters.");
+      inputRef.current?.focus();
       return;
     }
-
     setLoading(true);
     try {
       const res = await axios.post(`${API}/api/scans/create/`, { address: trimmed, network });
@@ -78,108 +100,183 @@ export default function Home() {
     }
   };
 
+  const useExample = (ex: (typeof EXAMPLES)[number]) => {
+    setAddress(ex.address);
+    setNetwork(ex.network);
+    setError("");
+    inputRef.current?.focus();
+  };
+
   return (
     <>
-      <Navbar badge="AI-POWERED" />
+      <Navbar />
 
-      {/* Hero */}
-      <section className="hero">
+      <section className="hero hero-compact">
         <div className="container hero-inner">
+          <div className="hero-eyebrow">
+            <span className="eyebrow-dot" /> Slither · Mythril · Local LLM
+          </div>
           <h1 className="hero-title">
-            <span className="title-line-1">AUDIT SMART</span>
-            <span className="title-line-2">CONTRACTS</span>
-            <span className="title-line-3">BEFORE ATTACKERS DO</span>
+            <span className="title-line-1">Audit smart contracts</span>
+            <span className="title-line-accent">before attackers do</span>
           </h1>
           <p className="hero-sub">
-            Enterprise-grade vulnerability detection in minutes. Static analysis, symbolic execution,
-            AI semantic review, and honeypot detection — all in one automated pipeline.
+            Paste a deployed address. Static analysis, symbolic execution, AI review and honeypot checks run in a
+            single pipeline, with live progress.
           </p>
 
-          {/* Scan Form */}
-          <div className="scan-form-wrapper">
-            <div className="scan-form-title">⬡ SCAN A CONTRACT</div>
-            <div className="scan-form-sub">
-              paste any deployed contract address → get a full security audit
+          <form className="scanbar-wrap" onSubmit={handleSubmit} noValidate>
+            <div className={`scanbar ${error ? "has-error" : ""} ${looksValid ? "is-valid" : ""}`}>
+              <span className="scanbar-icon" aria-hidden="true">
+                <Icon name="search" size={18} />
+              </span>
+              <input
+                ref={inputRef}
+                id="contract-address"
+                className="scanbar-input"
+                type="text"
+                placeholder="0x… contract address"
+                value={address}
+                onChange={(e) => {
+                  setAddress(e.target.value);
+                  setError("");
+                }}
+                spellCheck={false}
+                autoComplete="off"
+                aria-label="Contract address"
+                aria-invalid={!!error}
+                aria-describedby="scan-help"
+              />
+              <select
+                id="network-select"
+                className="scanbar-select"
+                value={network}
+                onChange={(e) => setNetwork(e.target.value)}
+                aria-label="Network"
+              >
+                {NETWORKS.map((n) => (
+                  <option key={n.value} value={n.value}>{n.label}</option>
+                ))}
+                <optgroup label="Coming soon">
+                  <option disabled>Solana</option>
+                  <option disabled>Aptos / Sui</option>
+                  <option disabled>TON</option>
+                </optgroup>
+              </select>
+              <button id="scan-submit-btn" type="submit" className="btn btn-primary scanbar-btn" disabled={loading}>
+                {loading ? (
+                  <>
+                    <span className="btn-spinner" aria-hidden="true" /> Starting…
+                  </>
+                ) : (
+                  <>
+                    Scan <Icon name="arrowRight" size={16} />
+                  </>
+                )}
+              </button>
             </div>
-            <form onSubmit={handleSubmit}>
-              <div className="input-group">
-                <input
-                  id="contract-address"
-                  className={`form-input ${error ? "error" : ""}`}
-                  type="text"
-                  placeholder="0x742d35Cc6634C0532925a3b8D4C9b4A1b2e3f4a5"
-                  value={address}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    setAddress(e.target.value);
-                    setError("");
-                  }}
-                  spellCheck={false}
-                  autoComplete="off"
-                  aria-label="Contract address"
-                  aria-invalid={!!error}
-                />
-                <div className="input-row">
-                  <select
-                    id="network-select"
-                    className="form-select"
-                    value={network}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setNetwork(e.target.value)}
-                    aria-label="Network"
-                  >
-                    {NETWORKS.map((n) => (
-                      <option key={n.value} value={n.value}>{n.label}</option>
-                    ))}
-                    <optgroup label="Coming soon">
-                      <option disabled>Solana</option>
-                      <option disabled>Aptos / Sui</option>
-                      <option disabled>TON</option>
-                    </optgroup>
-                  </select>
-                  <button
-                    id="scan-submit-btn"
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={loading}
-                    style={{ whiteSpace: "nowrap" }}
-                  >
-                    {loading ? "STARTING..." : "SCAN NOW"}
-                  </button>
-                </div>
-                {error && <div className="form-error" role="alert">⚠ {error}</div>}
-              </div>
-            </form>
-          </div>
 
-          {/* Stats */}
-          <div className="stats-row">
-            <div className="stat-card stat-card-red">
-              <div className="stat-value stat-red">90+</div>
-              <div className="stat-label">Slither Detectors</div>
+            <div id="scan-help" className="scanbar-meta">
+              {error ? (
+                <span className="form-error" role="alert">{error}</span>
+              ) : (
+                <>
+                  <span className="muted">Try:</span>
+                  {EXAMPLES.map((ex) => (
+                    <button type="button" key={ex.label} className="chip" onClick={() => useExample(ex)}>
+                      {ex.label} <span className="chip-hint">{ex.hint}</span>
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
-            <div className="stat-card stat-card-blue">
-              <div className="stat-value stat-blue">AI</div>
-              <div className="stat-label">Semantic Review</div>
-            </div>
-            <div className="stat-card stat-card-yellow">
-              <div className="stat-value stat-yellow">5</div>
-              <div className="stat-label">EVM Networks</div>
-            </div>
-          </div>
+          </form>
+
+          <ul className="trust-strip">
+            <li><Icon name="download" size={16} /> PDF · SARIF · JSON export</li>
+            <li><Icon name="lock" size={16} /> Code never leaves your server</li>
+            <li><Icon name="gauge" size={16} /> Typically 2–5 minutes</li>
+          </ul>
         </div>
       </section>
 
-      {/* Features */}
-      <section className="features">
+      {recent.length > 0 && (
+        <section className="home-section">
+          <div className="container">
+            <div className="section-row">
+              <h2 className="section-heading">Recent scans</h2>
+              <Link to="/dashboard" className="link-arrow">
+                All scans <Icon name="arrowRight" size={14} />
+              </Link>
+            </div>
+            <div className="recent-grid">
+              {recent.map((s) => {
+                const active = s.status !== "complete" && s.status !== "failed";
+                return (
+                  <Link
+                    key={s.id}
+                    to={active ? `/scan/${s.id}` : `/report/${s.id}`}
+                    className="recent-card"
+                    style={{ ["--tone" as any]: s.status === "failed" ? "var(--red)" : riskTone(s.risk_level) }}
+                  >
+                    <div className="recent-top">
+                      <span className="recent-name">{s.contract_name || "Unknown contract"}</span>
+                      <span className="recent-score">
+                        {s.status === "complete" && s.risk_score != null
+                          ? Math.round(s.risk_score)
+                          : s.status === "failed"
+                          ? "✕"
+                          : `${s.progress}%`}
+                      </span>
+                    </div>
+                    <div className="recent-meta mono">
+                      {shortAddress(s.address)} · {s.network}
+                    </div>
+                    <div className="recent-foot">
+                      <span>
+                        {s.status === "complete"
+                          ? `${s.risk_level || "—"} risk · ${s.finding_count} finding${s.finding_count === 1 ? "" : "s"}`
+                          : s.status === "failed"
+                          ? "Failed"
+                          : "Scanning…"}
+                      </span>
+                      <span className="muted">{new Date(s.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="home-section">
         <div className="container">
-          <div className="section-label">// Analysis Pipeline</div>
-          <h2 className="section-title">MULTI-LAYER SECURITY</h2>
-          <p className="section-sub">
-            Every contract runs through 5 independent analysis stages for maximum coverage.
-          </p>
+          <div className="section-label">// How it works</div>
+          <h2 className="section-title">One address. Five layers.</h2>
+          <ol className="pipeline-track">
+            {PIPELINE.map((step, i) => (
+              <li key={step.title} className="pipeline-node">
+                <span className="pipeline-num">{String(i + 1).padStart(2, "0")}</span>
+                <span className="pipeline-title">{step.title}</span>
+                <span className="pipeline-desc">{step.desc}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </section>
+
+      <section className="home-section features">
+        <div className="container">
+          <div className="section-label">// Capabilities</div>
+          <h2 className="section-title">Multi-layer security</h2>
+          <p className="section-sub">Every finding is cross-checked, scored by SWC impact and tool confidence, and explained.</p>
           <div className="features-grid">
             {FEATURES.map((f) => (
               <div key={f.name} className="feature-card">
-                <div className={`feature-icon-wrap ${f.colorClass}`}>{f.icon}</div>
+                <div className={`feature-icon-wrap ${f.tone}`}>
+                  <Icon name={f.icon} size={22} />
+                </div>
                 <div className="feature-name">{f.name}</div>
                 <div className="feature-desc">{f.desc}</div>
               </div>
@@ -190,7 +287,8 @@ export default function Home() {
 
       <footer className="footer">
         <p>
-          <strong>Web3 Security Scanner</strong> — Open source · AI-powered · Locally hosted LLM · Export to PDF, SARIF &amp; JSON.
+          <strong>Web3 Security Scanner</strong> · open source · automated analysis is not a substitute for a manual
+          audit.
         </p>
       </footer>
     </>
