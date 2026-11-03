@@ -1,8 +1,9 @@
 import React, { useState, FormEvent, ChangeEvent } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { API, errorMessage } from "../api";
+import Navbar from "../components/Navbar";
+import { EVM_ADDRESS, NETWORKS } from "../types";
 
 interface Feature {
   icon: string;
@@ -61,48 +62,25 @@ export default function Home() {
     e.preventDefault();
     setError("");
 
-    if (network === "solana" && address.length < 32) {
-      setError("Please enter a valid Solana program ID.");
-      return;
-    } else if (network === "aptos" || network === "sui") {
-      if (!address.startsWith("0x")) {
-        setError("Please enter a valid Move module address (0x...).");
-        return;
-      }
-    } else if (network === "ton" && address.length < 48) {
-      setError("Please enter a valid TON address.");
-      return;
-    } else if (!["solana", "aptos", "sui", "ton"].includes(network) && !/^0x[a-fA-F0-9]{40}$/.test(address)) {
-      setError("Please enter a valid Ethereum contract address (0x + 40 hex chars).");
+    const trimmed = address.trim();
+    if (!EVM_ADDRESS.test(trimmed)) {
+      setError("Please enter a valid contract address (0x + 40 hex chars).");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await axios.post(`${API}/api/scans/create/`, { address, network });
+      const res = await axios.post(`${API}/api/scans/create/`, { address: trimmed, network });
       navigate(`/scan/${res.data.id}`);
-    } catch (err: any) {
-      setError(
-        err.response?.data?.detail ||
-          err.message ||
-          "Failed to start scan. Is the backend running?"
-      );
+    } catch (err) {
+      setError(errorMessage(err, "Failed to start scan. Is the backend running?"));
       setLoading(false);
     }
   };
 
   return (
     <>
-      {/* Navbar */}
-      <nav className="navbar">
-        <a href="/" className="navbar-logo">
-          WEB3<span className="logo-dot">.</span>SCANNER
-        </a>
-        <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-          <span className="nav-badge">AI-POWERED</span>
-          <Link to="/dashboard" style={{ color: "var(--text-1)", textDecoration: "none", fontSize: 13, fontFamily: "'JetBrains Mono', monospace" }}>Dashboard</Link>
-        </div>
-      </nav>
+      <Navbar badge="AI-POWERED" />
 
       {/* Hero */}
       <section className="hero">
@@ -137,6 +115,8 @@ export default function Home() {
                   }}
                   spellCheck={false}
                   autoComplete="off"
+                  aria-label="Contract address"
+                  aria-invalid={!!error}
                 />
                 <div className="input-row">
                   <select
@@ -144,16 +124,16 @@ export default function Home() {
                     className="form-select"
                     value={network}
                     onChange={(e: ChangeEvent<HTMLSelectElement>) => setNetwork(e.target.value)}
+                    aria-label="Network"
                   >
-                    <option value="mainnet">Ethereum Mainnet</option>
-                    <option value="polygon">Polygon</option>
-                    <option value="bsc">Binance Smart Chain</option>
-                    <option value="arbitrum">Arbitrum</option>
-                    <option value="optimism">Optimism</option>
-                    <option value="solana">Solana</option>
-                    <option value="aptos">Aptos</option>
-                    <option value="sui">Sui</option>
-                    <option value="ton">TON</option>
+                    {NETWORKS.map((n) => (
+                      <option key={n.value} value={n.value}>{n.label}</option>
+                    ))}
+                    <optgroup label="Coming soon">
+                      <option disabled>Solana</option>
+                      <option disabled>Aptos / Sui</option>
+                      <option disabled>TON</option>
+                    </optgroup>
                   </select>
                   <button
                     id="scan-submit-btn"
@@ -165,7 +145,7 @@ export default function Home() {
                     {loading ? "STARTING..." : "SCAN NOW"}
                   </button>
                 </div>
-                {error && <div className="form-error">⚠ {error}</div>}
+                {error && <div className="form-error" role="alert">⚠ {error}</div>}
               </div>
             </form>
           </div>
@@ -194,7 +174,7 @@ export default function Home() {
           <div className="section-label">// Analysis Pipeline</div>
           <h2 className="section-title">MULTI-LAYER SECURITY</h2>
           <p className="section-sub">
-            Every contract runs through 4 independent analysis engines for maximum coverage.
+            Every contract runs through 5 independent analysis stages for maximum coverage.
           </p>
           <div className="features-grid">
             {FEATURES.map((f) => (
@@ -210,7 +190,7 @@ export default function Home() {
 
       <footer className="footer">
         <p>
-          <strong>Web3 Security Scanner</strong> — Open source · AI-powered · Locally hosted LLM · No API keys required.
+          <strong>Web3 Security Scanner</strong> — Open source · AI-powered · Locally hosted LLM · Export to PDF, SARIF &amp; JSON.
         </p>
       </footer>
     </>

@@ -2,14 +2,14 @@ import React, { useState } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
-
-const API = import.meta.env.VITE_API_BASE_URL || "";
+import { API, errorMessage } from "../api";
 
 export default function Register() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const { login, user } = useAuth();
   const navigate = useNavigate();
 
@@ -19,31 +19,17 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
+    setSubmitting(true);
     try {
-      // 1. Register
       await axios.post(`${API}/api/accounts/register/`, { username, email, password });
-      // 2. Login
       const res = await axios.post(`${API}/api/accounts/login/`, { username, password });
       login(res.data.access, res.data.refresh);
       navigate("/dashboard");
-    } catch (err: any) {
-      if (err.response && err.response.data) {
-        const data = err.response.data;
-        const messages: string[] = [];
-        for (const key in data) {
-          const fieldName = key.charAt(0).toUpperCase() + key.slice(1);
-          if (Array.isArray(data[key])) {
-            messages.push(`${fieldName}: ${data[key].join(' ')}`);
-          } else if (typeof data[key] === 'string') {
-            messages.push(data[key]);
-          }
-        }
-        if (messages.length > 0) {
-          setError(messages.join(' | '));
-          return;
-        }
-      }
-      setError("Failed to register. Username might be taken.");
+    } catch (err) {
+      setError(errorMessage(err, "Failed to register. Username might be taken."));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -114,11 +100,17 @@ export default function Register() {
                   style={{ width: "100%" }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={10}
+                  aria-describedby="pw-hint"
                   required
                 />
+                <div id="pw-hint" style={{ fontSize: 12, color: "var(--text-3)", marginTop: 6 }}>
+                  At least 10 characters, not too common, not similar to your username.
+                </div>
               </div>
-              <button type="submit" className="btn btn-primary" style={{ marginTop: 16, width: "100%" }}>
-                Create Account
+              <button type="submit" className="btn btn-primary" style={{ marginTop: 16, width: "100%" }} disabled={submitting}>
+                {submitting ? "Creating account…" : "Create Account"}
               </button>
             </form>
             <p style={{ marginTop: 24, textAlign: "center", fontSize: 14, color: "var(--text-3)" }}>
