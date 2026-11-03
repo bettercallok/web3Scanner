@@ -50,6 +50,8 @@ class ScanJob(models.Model):
     proxy_type = models.CharField(max_length=20, blank=True)  # transparent|eip1967|oz_legacy
     proxy_address = models.CharField(max_length=42, blank=True)
     implementation_address = models.CharField(max_length=42, blank=True)
+    # sha256 of the deployed runtime bytecode — used to detect upgrades/redeploys.
+    bytecode_hash = models.CharField(max_length=66, blank=True)
 
     # Analysis mode
     class AnalysisMode(models.TextChoices):
@@ -81,6 +83,16 @@ class ScanJob(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="scanjob_user_created_idx"),
+            models.Index(fields=["address", "network"], name="scanjob_addr_net_idx"),
+        ]
+
+    ACTIVE_STATUSES = ("pending", "fetching", "analyzing", "ai_review", "reporting")
+
+    @property
+    def is_active(self) -> bool:
+        return self.status in self.ACTIVE_STATUSES
 
     def __str__(self):
         return f"{self.address} [{self.network}] — {self.status}"
@@ -124,6 +136,8 @@ class Vulnerability(models.Model):
     remediation = models.TextField(blank=True)
     tool = models.CharField(max_length=50, blank=True)  # slither | mythril | ai | manual
     is_false_positive = models.BooleanField(default=False)
+    # Who decided it is a false positive: "" (not FP) | "ai" | "user"
+    false_positive_source = models.CharField(max_length=10, blank=True)
 
     # Exploit PoC Generation
     poc_code = models.TextField(blank=True)       # Foundry test code
